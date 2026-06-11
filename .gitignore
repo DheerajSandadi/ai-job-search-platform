@@ -1,0 +1,31 @@
+# Environment
+.env
+.env.local
+
+# Gmail OAuth — never commit
+credentials.json
+token.json
+
+# Resume file (may contain personal info)
+resume.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

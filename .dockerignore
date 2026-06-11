@@ -1,0 +1,10 @@
+.git
+.gitignore
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.env
+**/token.json
+**/credentials.json
+README.md
+*.md
