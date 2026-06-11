@@ -151,8 +151,9 @@ alter table settings add column if not exists gmail_access_token  text;
 alter table settings add column if not exists gmail_refresh_token text;
 
 -- ─── manual-apply workflow columns ───────────────────────────────────────────
-alter table applications add column if not exists submitted_at timestamptz;
-alter table applications add column if not exists approved_at  timestamptz;
+alter table applications add column if not exists submitted_at  timestamptz;
+alter table applications add column if not exists approved_at   timestamptz;
+alter table applications add column if not exists retry_count   int not null default 0;
 
 -- ─── auto-update updated_at trigger ─────────────────────────────────────────
 create or replace function update_updated_at_column()

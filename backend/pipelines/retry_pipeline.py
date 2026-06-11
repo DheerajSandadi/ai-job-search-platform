@@ -1,65 +1,98 @@
-from __future__ import annotations
-
-from datetime import datetime, timezone
-from uuid import uuid4
+import asyncio
 import structlog
-from agents.resume import agent as resume_agent
-from browser.form_filler import fill_application
+from concurrent.futures import ThreadPoolExecutor
+
+from core.supabase_client import get_supabase_client
 
 logger = structlog.get_logger()
+_executor = ThreadPoolExecutor(max_workers=2)
 
 
-async def run(failed_applications: list[dict] | None = None) -> dict:
+async def run() -> dict:
     """
-    Retry failed job applications.
-    In production this would pull failed apps from Supabase;
-    for now operates on the list passed in or does a no-op.
+    Retry pipeline — runs at 9AM daily.
+    Queries Supabase for failed applications with retry_count < 3.
+    Re-queues them as pending for manual re-apply, increments retry_count.
     """
-    run_id = str(uuid4())
-    started_at = datetime.now(timezone.utc)
-    logger.info("retry_pipeline_start", run_id=run_id)
-
-    apps_to_retry = failed_applications or []
-    retried = 0
-    newly_failed = 0
-
-    for app in apps_to_retry:
-        job = app.get("job", {})
-        job_url = job.get("url", "")
-        resume_data = app.get("resume", {})
-        tailored_text = resume_data.get("tailored_text", "")
-
-        if not job_url:
-            logger.warning("retry_skip_no_url", job=job.get("title"))
-            continue
-
-        try:
-            result = await fill_application(
-                job_url=job_url,
-                resume_path="./resume.pdf",
-                cover_letter=tailored_text[:2000] if tailored_text else None,
-            )
-            if result["success"]:
-                retried += 1
-                logger.info("retry_success", url=job_url)
-            else:
-                newly_failed += 1
-                logger.warning("retry_failed_again", url=job_url, error=result.get("error"))
-        except Exception as exc:
-            newly_failed += 1
-            logger.error("retry_exception", url=job_url, error=str(exc))
+    logger.info("retry_pipeline.start")
+    sb = get_supabase_client()
 
     stats = {
-        "applications_retried": len(apps_to_retry),
-        "retry_success": retried,
-        "retry_failed": newly_failed,
+        "found": 0,
+        "retried": 0,
+        "max_retries_reached": 0,
+        "errors": 0,
     }
-    logger.info("retry_pipeline_complete", run_id=run_id, **stats)
-    return {
-        "run_id": run_id,
-        "status": "completed",
-        "started_at": started_at.isoformat(),
-        "completed_at": datetime.now(timezone.utc).isoformat(),
-        "stats": stats,
-        "errors": [],
-    }
+
+    try:
+        result = sb.table("applications").select(
+            "*, jobs(*), resumes(*)"
+        ).eq(
+            "status", "failed"
+        ).lt(
+            "retry_count", 3
+        ).order(
+            "created_at", desc=False
+        ).execute()
+
+        failed_apps = result.data or []
+        stats["found"] = len(failed_apps)
+
+        if not failed_apps:
+            logger.info("retry_pipeline.nothing_to_retry")
+            return stats
+
+        logger.info("retry_pipeline.found", count=len(failed_apps))
+
+        for app in failed_apps:
+            app_id = app["id"]
+            job = app.get("jobs") or {}
+            retry_count = app.get("retry_count", 0)
+
+            try:
+                sb.table("applications").update({
+                    "retry_count": retry_count + 1,
+                    "status": "pending",
+                }).eq("id", app_id).execute()
+
+                sb.table("jobs").update({
+                    "status": "approved"
+                }).eq("id", app["job_id"]).execute()
+
+                logger.info("retry_pipeline.requeued",
+                            app_id=app_id,
+                            job=job.get("title"),
+                            company=job.get("company"),
+                            retry_count=retry_count + 1)
+
+                stats["retried"] += 1
+
+            except Exception as e:
+                logger.error("retry_pipeline.app_error", app_id=app_id, error=str(e))
+                stats["errors"] += 1
+                continue
+
+        maxed_out = sb.table("applications").select(
+            "id, jobs(title, company)"
+        ).eq(
+            "status", "failed"
+        ).gte(
+            "retry_count", 3
+        ).execute()
+
+        if maxed_out.data:
+            stats["max_retries_reached"] = len(maxed_out.data)
+            for app in maxed_out.data:
+                job = app.get("jobs") or {}
+                logger.warning("retry_pipeline.max_retries_reached",
+                               app_id=app["id"],
+                               job=job.get("title"),
+                               company=job.get("company"))
+
+        logger.info("retry_pipeline.complete", **stats)
+        return stats
+
+    except Exception as e:
+        logger.error("retry_pipeline.error", error=str(e))
+        stats["errors"] += 1
+        return stats
