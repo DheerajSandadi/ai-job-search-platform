@@ -7,6 +7,7 @@ import structlog
 
 from api.routes import jobs, applications, outreach, inbox, analytics, pipelines, settings
 from api.routes.auth import router as auth_router
+from api.routes.tracker import router as tracker_router
 from scheduler.jobs import start_scheduler, stop_scheduler
 
 logger = structlog.get_logger()
@@ -43,6 +44,7 @@ app.include_router(inbox.router,        prefix=PREFIX)
 app.include_router(analytics.router,    prefix=PREFIX)
 app.include_router(pipelines.router,    prefix=PREFIX)
 app.include_router(settings.router,     prefix=PREFIX)
+app.include_router(tracker_router,      prefix=PREFIX)
 app.include_router(auth_router)
 
 

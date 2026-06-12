@@ -167,4 +167,58 @@ export async function updateSettings(body: Settings): Promise<Settings> {
   return res.data;
 }
 
+export async function sendReply(emailId: string): Promise<{ message: string; email_id: string; sent_at: string }> {
+  const res = await api.post(`${BASE}/inbox/${emailId}/send-reply`)
+  return res.data
+}
+
+// ─── Gmail Tracker ────────────────────────────────────────────────────────────
+
+export const getTrackerClassifyStatus = () =>
+  api.get(`${BASE}/tracker/classify/status`).then(r => r.data)
+
+export const startTrackerClassification = () =>
+  api.post(`${BASE}/tracker/classify`).then(r => r.data)
+
+export const getTrackerDashboardOverview = () =>
+  api.get(`${BASE}/tracker/dashboard/overview`).then(r => r.data)
+
+export const getTrackerActivity = (days = 30) =>
+  api.get(`${BASE}/tracker/dashboard/activity`, { params: { days } }).then(r => r.data)
+
+export const getTrackerTopCompanies = () =>
+  api.get(`${BASE}/tracker/dashboard/top-companies`).then(r => r.data)
+
+export const getTrackerEmailStats = () =>
+  api.get(`${BASE}/tracker/dashboard/email-stats`).then(r => r.data)
+
+export const getTrackerApplications = (params: Record<string, unknown> = {}) =>
+  api.get(`${BASE}/tracker/applications`, { params }).then(r => r.data)
+
+export const createTrackerApplication = (data: {
+  company_name: string; role_title: string; status?: string;
+  applied_date?: string; job_url?: string; notes?: string;
+}) => api.post(`${BASE}/tracker/applications`, data).then(r => r.data)
+
+export const updateTrackerApplicationStatus = (id: string, status: string) =>
+  api.patch(`${BASE}/tracker/applications/${id}/status`, null, { params: { status } }).then(r => r.data)
+
+export const updateTrackerApplication = (id: string, data: Record<string, unknown>) =>
+  api.patch(`${BASE}/tracker/applications/${id}`, data).then(r => r.data)
+
+export const deleteTrackerApplication = (id: string) =>
+  api.delete(`${BASE}/tracker/applications/${id}`).then(r => r.data)
+
+export const getTrackerApplicationEmails = (id: string) =>
+  api.get(`${BASE}/tracker/applications/${id}/emails`).then(r => r.data)
+
+export const getTrackerFollowupDraft = (emailId: string) =>
+  api.get(`${BASE}/tracker/emails/${emailId}/followup-draft`).then(r => r.data)
+
+export const sendTrackerFollowup = (emailId: string, body: string, subject?: string) =>
+  api.post(`${BASE}/tracker/emails/${emailId}/send-followup`, { body, subject }).then(r => r.data)
+
+export const syncTrackerGmail = () =>
+  api.post(`${BASE}/tracker/gmail/sync`).then(r => r.data)
+
 export default api;

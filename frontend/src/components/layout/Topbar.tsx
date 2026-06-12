@@ -5,12 +5,14 @@ import { usePathname } from 'next/navigation'
 import { Bell } from 'lucide-react'
 
 const NAV_LINKS = [
-  { href: '/jobs',         label: 'Find Jobs' },
-  { href: '/applications', label: 'Applications' },
-  { href: '/outreach',     label: 'Outreach' },
-  { href: '/inbox',        label: 'Inbox' },
-  { href: '/analytics',    label: 'Analytics' },
-  { href: '/dashboard',    label: 'Dashboard' },
+  { href: '/jobs',             label: 'Find Jobs' },
+  { href: '/applications',     label: 'Applications' },
+  { href: '/outreach',         label: 'Outreach' },
+  { href: '/inbox',            label: 'Inbox' },
+  { href: '/tracker',          label: 'Tracker' },
+  { href: '/tracker/pipeline', label: 'Pipeline' },
+  { href: '/analytics',        label: 'Analytics' },
+  { href: '/dashboard',        label: 'Dashboard' },
 ]
 
 export default function Topbar() {

@@ -177,6 +177,40 @@ export interface PipelineStatusResponse {
   inbox: PipelineRun;
 }
 
+// ─── Gmail Tracker ────────────────────────────────────────────────────────────
+
+export interface TrackerApplication {
+  id: string
+  company_name: string | null
+  role_title: string | null
+  status: 'applied' | 'screen' | 'interview' | 'offer' | 'rejected'
+  applied_date: string | null
+  source: 'gmail_auto' | 'manual'
+  job_url: string | null
+  notes: string | null
+  latest_email_at: string | null
+  email_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface TrackerDashboard {
+  total_applications: number
+  total_emails: number
+  interviews: number
+  offers: number
+  rejections: number
+  response_rate: number
+  followups_due: number
+}
+
+export interface ActivityDay {
+  date: string
+  sent: number
+  received: number
+  total: number
+}
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 export interface Settings {
