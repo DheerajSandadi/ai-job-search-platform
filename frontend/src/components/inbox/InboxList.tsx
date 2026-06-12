@@ -6,6 +6,8 @@ import { useInbox } from '@/lib/hooks/useInbox'
 import { formatDate } from '@/lib/utils'
 import type { EmailClassification } from '@/types'
 
+type Props = { classification?: string; days?: number }
+
 const CLASS_STYLE: Record<EmailClassification, string> = {
   recruiter_reply:  'tag-green',
   interview_invite: 'tag-green',
@@ -24,8 +26,8 @@ const CLASS_LABEL: Record<EmailClassification, string> = {
   unrelated:        'Other',
 }
 
-export function InboxList() {
-  const { data, isLoading } = useInbox()
+export function InboxList({ classification, days }: Props = {}) {
+  const { data, isLoading } = useInbox(classification, days)
   const [expanded, setExpanded] = useState<string | null>(null)
 
   if (isLoading) {

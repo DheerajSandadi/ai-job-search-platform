@@ -90,14 +90,29 @@ export async function fetchOutreach(params?: {
 
 // ─── Inbox ────────────────────────────────────────────────────────────────────
 
-export async function fetchInbox(params?: {
-  classification?: EmailClassification;
-  page?: number;
-  page_size?: number;
-}): Promise<InboxEmail[]> {
-  const res = await api.get<InboxEmail[]>(`${BASE}/inbox`, { params });
-  return res.data;
+export async function getInbox(
+  classification?: string,
+  days?: number,
+  limit = 100,
+  offset = 0,
+): Promise<InboxEmail[]> {
+  const params: Record<string, string | number> = { limit, offset }
+  if (classification) params.classification = classification
+  if (days) params.days = days
+  const res = await api.get<InboxEmail[]>(`${BASE}/inbox`, { params })
+  return res.data
 }
+
+export async function getEmailThreads(stage?: string, days = 30) {
+  const params: Record<string, string | number> = { days }
+  if (stage) params.stage = stage
+  const res = await api.get(`${BASE}/inbox/threads`, { params })
+  return res.data
+}
+
+/** @deprecated use getInbox */
+export const fetchInbox = (params?: { classification?: EmailClassification; page?: number }) =>
+  getInbox(params?.classification)
 
 // ─── Analytics ────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,18 @@
 import useSWR from "swr";
-import { fetchInbox } from "@/lib/api";
-import type { EmailClassification } from "@/types";
+import { getInbox, getEmailThreads } from "@/lib/api";
 
-export function useInbox(params?: { classification?: EmailClassification; page?: number }) {
-  return useSWR(["inbox", params], () => fetchInbox(params));
+export function useInbox(classification?: string, days?: number) {
+  return useSWR(
+    ["inbox", classification, days],
+    () => getInbox(classification, days),
+    { refreshInterval: 30000, revalidateOnFocus: true },
+  );
+}
+
+export function useEmailThreads(stage?: string, days = 30) {
+  return useSWR(
+    ["inbox/threads", stage, days],
+    () => getEmailThreads(stage, days),
+    { refreshInterval: 30000, revalidateOnFocus: true },
+  );
 }
