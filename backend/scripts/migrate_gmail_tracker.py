@@ -23,16 +23,19 @@ PG_USER = os.getenv("GMAIL_TRACKER_PG_USER", "postgres")
 PG_PASS = os.getenv("GMAIL_TRACKER_PG_PASS", "")
 
 _STAGE_MAP = {
-    "recruiter":  "classified",
     "interview":  "interview",
     "offer":      "offer",
     "rejection":  "rejected",
+    "recruiter":  "classified",
     "auto_reply": "classified",
     "other":      "classified",
 }
 
 
-def get_pipeline_stage(classification: str | None) -> str:
+def get_pipeline_stage(classification: str | None, status: str) -> str:
+    """Map Gmail tracker classification + status to pipeline stage."""
+    if status in ("rejected", "declined"):
+        return "rejected"
     return _STAGE_MAP.get(classification or "other", "classified")
 
 
@@ -49,16 +52,15 @@ def migrate():
         print("Make sure the Gmail tracker Docker container is running.")
         return
 
-    # Print actual schema so we know what we're working with
+    # Print actual schema
     cur.execute("""
         SELECT column_name, data_type
         FROM information_schema.columns
         WHERE table_name = 'emails'
         ORDER BY ordinal_position
     """)
-    schema_cols = cur.fetchall()
     print("Gmail tracker emails table columns:")
-    for col in schema_cols:
+    for col in cur.fetchall():
         print(f"  {col[0]}: {col[1]}")
     print()
 
@@ -70,15 +72,22 @@ def migrate():
             id,
             thread_id,
             sender,
+            recipient,
             subject,
-            body,
             snippet,
+            body,
+            sent_at,
+            direction,
             classification,
-            draft_reply,
-            received_at,
+            company_name,
+            role_title,
+            recruiter_name,
+            ai_confidence,
+            status,
+            requires_followup,
             created_at
         FROM emails
-        ORDER BY received_at ASC
+        ORDER BY sent_at ASC
     """)
     rows = cur.fetchall()
     cols = [d[0] for d in cur.description]
@@ -97,8 +106,12 @@ def migrate():
                 continue
 
             raw_sender = email.get("sender") or ""
-            sender_name = raw_sender.split("<")[0].strip().strip('"')
+            sender_name = (
+                email.get("recruiter_name") or
+                raw_sender.split("<")[0].strip().strip('"')
+            )
             classification = email.get("classification") or "other"
+            status = email.get("status") or ""
 
             sb.table("inbox_emails").insert({
                 "id":               str(email["id"]),
@@ -110,13 +123,14 @@ def migrate():
                 "body_preview":     (email.get("snippet") or "")[:500],
                 "full_body":        email.get("body"),
                 "classification":   classification,
-                "pipeline_stage":   get_pipeline_stage(classification),
-                "draft_reply":      email.get("draft_reply"),
-                "company_name":     None,
-                "role_title":       None,
-                "received_at":      email["received_at"].isoformat() if email.get("received_at") else None,
+                "pipeline_stage":   get_pipeline_stage(classification, status),
+                "company_name":     email.get("company_name"),
+                "role_title":       email.get("role_title"),
+                "draft_reply":      None,
+                "received_at":      email["sent_at"].isoformat() if email.get("sent_at") else None,
                 "processed_at":     datetime.now(timezone.utc).isoformat(),
-                "reply_sent":       False,
+                "reply_sent":       bool(email.get("followup_sent", False)),
+                "reply_sent_at":    None,
             }).execute()
             migrated += 1
 
