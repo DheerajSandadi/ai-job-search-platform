@@ -4,11 +4,6 @@ Run once: python3 scripts/migrate_gmail_tracker.py
 
 Requires the Gmail tracker Postgres container to be reachable and
 GMAIL_TRACKER_PG_* env vars set in backend/.env.
-
-NOTE: This script assumes inbox_emails has been extended with the new columns
-added in the gmail-tracker integration migration (gmail_message_id, sender_email,
-sender_name, body_preview, full_body, company_name, role_title, pipeline_stage).
-Those column renames/additions must be applied in Supabase before running this.
 """
 import sys
 import os
@@ -27,6 +22,19 @@ PG_DB   = os.getenv("GMAIL_TRACKER_PG_DB",   "gmail_tracker")
 PG_USER = os.getenv("GMAIL_TRACKER_PG_USER", "postgres")
 PG_PASS = os.getenv("GMAIL_TRACKER_PG_PASS", "")
 
+_STAGE_MAP = {
+    "recruiter":  "classified",
+    "interview":  "interview",
+    "offer":      "offer",
+    "rejection":  "rejected",
+    "auto_reply": "classified",
+    "other":      "classified",
+}
+
+
+def get_pipeline_stage(classification: str | None) -> str:
+    return _STAGE_MAP.get(classification or "other", "classified")
+
 
 def migrate():
     print("Connecting to Gmail tracker PostgreSQL...")
@@ -41,14 +49,34 @@ def migrate():
         print("Make sure the Gmail tracker Docker container is running.")
         return
 
+    # Print actual schema so we know what we're working with
+    cur.execute("""
+        SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE table_name = 'emails'
+        ORDER BY ordinal_position
+    """)
+    schema_cols = cur.fetchall()
+    print("Gmail tracker emails table columns:")
+    for col in schema_cols:
+        print(f"  {col[0]}: {col[1]}")
+    print()
+
     sb = get_supabase_client()
 
     print("Fetching emails from Gmail tracker...")
     cur.execute("""
         SELECT
-            id, thread_id, sender, subject, body, snippet,
-            classification, pipeline_stage, draft_reply,
-            company_name, role_title, received_at, created_at
+            id,
+            thread_id,
+            sender,
+            subject,
+            body,
+            snippet,
+            classification,
+            draft_reply,
+            received_at,
+            created_at
         FROM emails
         ORDER BY received_at ASC
     """)
@@ -70,6 +98,7 @@ def migrate():
 
             raw_sender = email.get("sender") or ""
             sender_name = raw_sender.split("<")[0].strip().strip('"')
+            classification = email.get("classification") or "other"
 
             sb.table("inbox_emails").insert({
                 "id":               str(email["id"]),
@@ -80,11 +109,11 @@ def migrate():
                 "subject":          email.get("subject"),
                 "body_preview":     (email.get("snippet") or "")[:500],
                 "full_body":        email.get("body"),
-                "classification":   email.get("classification") or "other",
-                "pipeline_stage":   email.get("pipeline_stage") or "classified",
+                "classification":   classification,
+                "pipeline_stage":   get_pipeline_stage(classification),
                 "draft_reply":      email.get("draft_reply"),
-                "company_name":     email.get("company_name"),
-                "role_title":       email.get("role_title"),
+                "company_name":     None,
+                "role_title":       None,
                 "received_at":      email["received_at"].isoformat() if email.get("received_at") else None,
                 "processed_at":     datetime.now(timezone.utc).isoformat(),
                 "reply_sent":       False,
@@ -108,14 +137,14 @@ def migrate():
         tid = email["thread_id"]
         if tid not in threads:
             threads[tid] = {
-                "thread_id":      tid,
-                "company_name":   email.get("company_name"),
-                "role_title":     email.get("role_title"),
-                "pipeline_stage": email.get("pipeline_stage") or "classified",
-                "email_count":    0,
-                "last_email_at":  None,
-                "last_subject":   None,
-                "last_sender":    None,
+                "thread_id":       tid,
+                "company_name":    email.get("company_name"),
+                "role_title":      email.get("role_title"),
+                "pipeline_stage":  email.get("pipeline_stage") or "classified",
+                "email_count":     0,
+                "last_email_at":   None,
+                "last_subject":    None,
+                "last_sender":     None,
                 "has_draft_reply": False,
             }
         threads[tid]["email_count"] += 1
