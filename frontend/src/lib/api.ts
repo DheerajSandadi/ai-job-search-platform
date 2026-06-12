@@ -110,6 +110,11 @@ export async function getEmailThreads(stage?: string, days = 30) {
   return res.data
 }
 
+export async function updateThreadStage(threadId: string, stage: string) {
+  const res = await api.patch(`${BASE}/inbox/threads/${threadId}/stage`, { stage })
+  return res.data
+}
+
 /** @deprecated use getInbox */
 export const fetchInbox = (params?: { classification?: EmailClassification; page?: number }) =>
   getInbox(params?.classification)
@@ -142,6 +147,11 @@ export async function triggerMorningPipeline(): Promise<PipelineRun> {
 
 export async function triggerRetryPipeline(): Promise<PipelineRun> {
   const res = await api.post<PipelineRun>(`${BASE}/pipelines/retry/trigger`);
+  return res.data;
+}
+
+export async function triggerInboxPipeline(): Promise<PipelineRun> {
+  const res = await api.post<PipelineRun>(`${BASE}/pipelines/inbox/trigger`);
   return res.data;
 }
 

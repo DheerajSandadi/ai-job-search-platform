@@ -4,27 +4,28 @@ import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useInbox } from '@/lib/hooks/useInbox'
 import { formatDate } from '@/lib/utils'
-import type { EmailClassification } from '@/types'
+
+type ClassStyle = { bg: string; color: string; label: string }
+
+const CLASS_STYLE: Record<string, ClassStyle> = {
+  recruiter:        { bg: '#DBEAFE', color: '#1D4ED8', label: 'Recruiter' },
+  recruiter_reply:  { bg: '#DBEAFE', color: '#1D4ED8', label: 'Recruiter' },
+  interview:        { bg: '#DCFCE7', color: '#15803D', label: 'Interview' },
+  interview_invite: { bg: '#DCFCE7', color: '#15803D', label: 'Interview' },
+  offer:            { bg: '#EDE9FE', color: '#6D28D9', label: 'Offer' },
+  rejection:        { bg: '#FEE2E2', color: '#B91C1C', label: 'Rejection' },
+  rejected:         { bg: '#FEE2E2', color: '#B91C1C', label: 'Rejected' },
+  auto_reply:       { bg: '#F3F4F6', color: '#6B7280', label: 'Auto Reply' },
+  follow_up_needed: { bg: '#FEF9C3', color: '#A16207', label: 'Follow Up' },
+  unrelated:        { bg: '#F3F4F6', color: '#6B7280', label: 'Other' },
+  irrelevant:       { bg: '#F3F4F6', color: '#6B7280', label: 'Other' },
+  other:            { bg: '#F3F4F6', color: '#6B7280', label: 'Other' },
+}
+
+const getClassStyle = (classification: string | null): ClassStyle =>
+  CLASS_STYLE[classification ?? 'other'] ?? CLASS_STYLE['other']
 
 type Props = { classification?: string; days?: number }
-
-const CLASS_STYLE: Record<EmailClassification, string> = {
-  recruiter_reply:  'tag-green',
-  interview_invite: 'tag-green',
-  rejection:        'tag-red',
-  offer:            'tag-green',
-  follow_up_needed: 'tag-yellow',
-  unrelated:        'tag',
-}
-
-const CLASS_LABEL: Record<EmailClassification, string> = {
-  recruiter_reply:  'Reply',
-  interview_invite: 'Interview',
-  rejection:        'Rejection',
-  offer:            'Offer',
-  follow_up_needed: 'Follow-up',
-  unrelated:        'Other',
-}
 
 export function InboxList({ classification, days }: Props = {}) {
   const { data, isLoading } = useInbox(classification, days)
@@ -41,86 +42,86 @@ export function InboxList({ classification, days }: Props = {}) {
   const emails = data ?? []
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {emails.length === 0 && (
         <div
           className="card"
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 20px', fontSize: 13, color: 'var(--color-text-muted)' }}
         >
-          Inbox is empty
+          No emails found
         </div>
       )}
-      {emails.map((email) => (
-        <div key={email.id} className="card" style={{ overflow: 'hidden' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 16,
-              padding: `16px 20px ${expanded === email.id ? '12px' : '16px'}`,
-              cursor: 'pointer',
-            }}
-            onClick={() => setExpanded(expanded === email.id ? null : email.id)}
-          >
-            {email.classification && email.classification !== 'unrelated' ? (
-              <span className="active-dot" />
-            ) : (
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: 'var(--color-border)',
-                  flexShrink: 0,
-                }}
-              />
-            )}
 
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {email.subject}
-              </p>
-              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{email.sender_name || email.sender_email}</p>
+      {emails.map((email) => {
+        const style = getClassStyle(email.classification)
+        return (
+          <div key={email.id} className="card" style={{ overflow: 'hidden' }}>
+            <div
+              style={{
+                display: 'flex', alignItems: 'center', gap: 16,
+                padding: `14px 18px ${expanded === email.id ? '10px' : '14px'}`,
+                cursor: 'pointer',
+              }}
+              onClick={() => setExpanded(expanded === email.id ? null : email.id)}
+            >
+              <span style={{
+                display: 'inline-block', width: 6, height: 6,
+                borderRadius: '50%', flexShrink: 0,
+                background: email.classification && !['other', 'irrelevant', 'unrelated', 'auto_reply'].includes(email.classification)
+                  ? style.color : 'var(--color-border)',
+              }} />
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {email.subject}
+                </p>
+                <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                  {email.sender_name || email.sender_email}
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                {email.classification && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 500, padding: '2px 8px',
+                    borderRadius: 999, background: style.bg, color: style.color,
+                  }}>
+                    {style.label}
+                  </span>
+                )}
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  {formatDate(email.received_at)}
+                </span>
+                {expanded === email.id
+                  ? <ChevronUp size={14} style={{ color: 'var(--color-text-muted)' }} />
+                  : <ChevronDown size={14} style={{ color: 'var(--color-text-muted)' }} />
+                }
+              </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-              {email.classification && (
-                <span className={CLASS_STYLE[email.classification]}>{CLASS_LABEL[email.classification]}</span>
-              )}
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatDate(email.received_at)}</span>
-              {expanded === email.id
-                ? <ChevronUp size={14} style={{ color: 'var(--color-text-muted)' }} />
-                : <ChevronDown size={14} style={{ color: 'var(--color-text-muted)' }} />
-              }
-            </div>
-          </div>
+            {expanded === email.id && (
+              <div style={{ padding: '14px 18px 18px', borderTop: '0.5px solid var(--color-border)' }}>
+                <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: email.draft_reply ? 16 : 0 }}>
+                  {email.full_body ?? email.body_preview}
+                </p>
 
-          {expanded === email.id && (
-            <div style={{ padding: '16px 20px 20px', borderTop: '0.5px solid var(--color-border)' }}>
-              <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: email.draft_reply ? 16 : 0 }}>
-                {email.full_body ?? email.body_preview}
-              </p>
-
-              {email.draft_reply && (
-                <div
-                  style={{
+                {email.draft_reply && (
+                  <div style={{
                     background: 'rgba(91,127,255,0.05)',
                     border: '0.5px solid rgba(91,127,255,0.2)',
-                    borderRadius: 8,
-                    padding: 14,
-                  }}
-                >
-                  <p className="label" style={{ marginBottom: 8, color: '#5B7FFF' }}>Draft Reply</p>
-                  <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                    {email.draft_reply}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
+                    borderRadius: 8, padding: 14,
+                  }}>
+                    <p className="label" style={{ marginBottom: 8, color: '#5B7FFF' }}>Draft Reply</p>
+                    <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                      {email.draft_reply}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
