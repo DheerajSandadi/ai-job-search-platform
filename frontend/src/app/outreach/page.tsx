@@ -1,4 +1,7 @@
+import type { Metadata } from 'next'
 import { OutreachTable } from '@/components/outreach/OutreachTable'
+
+export const metadata: Metadata = { title: 'Outreach | JobPilot' }
 
 export default function OutreachPage() {
   return (

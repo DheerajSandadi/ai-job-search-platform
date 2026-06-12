@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Bookmark, Users, Send, ArrowRight } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import type { Job } from '@/types'
@@ -62,9 +63,9 @@ function ScoreTag({ score, featured }: { score: number | null | undefined; featu
       </span>
     )
   }
-  if (score >= 0.8) return <span className="tag-green">{pct}%</span>
-  if (score >= 0.6) return <span className="tag-yellow">{pct}%</span>
-  return <span className="tag-red">{pct}%</span>
+  if (score >= 0.8) return <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 999, background: '#DCFCE7', color: '#166534', whiteSpace: 'nowrap' }}>{pct}%</span>
+  if (score >= 0.6) return <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 999, background: '#FEF3C7', color: '#92400E', whiteSpace: 'nowrap' }}>{pct}%</span>
+  return <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 999, background: '#FEE2E2', color: '#991B1B', whiteSpace: 'nowrap' }}>{pct}%</span>
 }
 
 interface Props {
@@ -73,6 +74,7 @@ interface Props {
 }
 
 export function JobCard({ job, featured = false }: Props) {
+  const [bookmarked, setBookmarked] = useState(false)
   const bg = logoColor(job.company)
   const initial = job.company[0]?.toUpperCase() ?? '?'
   const applicants = deriveApplicants(job.id)
@@ -85,6 +87,12 @@ export function JobCard({ job, featured = false }: Props) {
   const featuredStyles: React.CSSProperties = {
     background: 'linear-gradient(135deg, #1a1a1a 0%, #111 100%)',
     border: 'none',
+  }
+
+  const handleDetails = () => {
+    if (job.url) {
+      window.open(job.url, '_blank', 'noopener,noreferrer')
+    }
   }
 
   return (
@@ -129,8 +137,18 @@ export function JobCard({ job, featured = false }: Props) {
           <span style={{ fontSize: 11, color: featured ? 'rgba(255,255,255,0.45)' : 'var(--color-text-muted)' }}>
             {formatDate(job.created_at)}
           </span>
-          <button className="btn-ghost" style={{ padding: 4 }}>
-            <Bookmark size={13} strokeWidth={1.8} style={{ color: featured ? 'rgba(255,255,255,0.5)' : 'var(--color-text-muted)' }} />
+          <button
+            aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this job'}
+            className="btn-ghost"
+            style={{
+              padding: 4,
+              color: bookmarked ? (featured ? '#fff' : '#111') : (featured ? 'rgba(255,255,255,0.5)' : 'var(--color-text-muted)'),
+              transition: 'all 0.15s',
+              transform: bookmarked ? 'scale(1.1)' : 'scale(1)',
+            }}
+            onClick={(e) => { e.stopPropagation(); setBookmarked(!bookmarked) }}
+          >
+            <Bookmark size={13} strokeWidth={1.8} fill={bookmarked ? 'currentColor' : 'none'} />
           </button>
         </div>
       </div>
@@ -182,11 +200,21 @@ export function JobCard({ job, featured = false }: Props) {
         </div>
 
         {featured ? (
-          <button className="btn-white" style={{ padding: '6px 14px', fontSize: 12, gap: 5 }}>
+          <button
+            aria-label={`View details for ${job.title} at ${job.company}`}
+            className="btn-white"
+            style={{ padding: '6px 14px', fontSize: 12, gap: 5 }}
+            onClick={handleDetails}
+          >
             Details <ArrowRight size={12} />
           </button>
         ) : (
-          <button className="btn-primary" style={{ padding: '6px 14px', fontSize: 12, gap: 5 }}>
+          <button
+            aria-label={`View details for ${job.title} at ${job.company}`}
+            className="btn-primary"
+            style={{ padding: '6px 14px', fontSize: 12, gap: 5 }}
+            onClick={handleDetails}
+          >
             Details <ArrowRight size={12} />
           </button>
         )}

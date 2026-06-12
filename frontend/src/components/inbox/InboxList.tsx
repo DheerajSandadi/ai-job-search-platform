@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useInbox } from '@/lib/hooks/useInbox'
 import { formatDate } from '@/lib/utils'
+import DOMPurify from 'dompurify'
 
 type ClassStyle = { bg: string; color: string; label: string }
 
@@ -24,6 +25,40 @@ const CLASS_STYLE: Record<string, ClassStyle> = {
 
 const getClassStyle = (classification: string | null): ClassStyle =>
   CLASS_STYLE[classification ?? 'other'] ?? CLASS_STYLE['other']
+
+function EmailBody({ body }: { body: string }) {
+  const isHTML = /<[a-z][\s\S]*>/i.test(body)
+
+  if (isHTML) {
+    const clean = typeof window !== 'undefined'
+      ? DOMPurify.sanitize(body, {
+          ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'div', 'span'],
+          ALLOWED_ATTR: ['href', 'style'],
+        })
+      : ''
+    return (
+      <div
+        style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.7 }}
+        dangerouslySetInnerHTML={{ __html: clean }}
+      />
+    )
+  }
+
+  const linkified = body.replace(
+    /(https?:\/\/[^\s]+)/g,
+    (url) => {
+      const display = url.length > 50 ? url.slice(0, 47) + '...' : url
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#6366f1">${display}</a>`
+    },
+  )
+
+  return (
+    <div
+      style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}
+      dangerouslySetInnerHTML={{ __html: linkified }}
+    />
+  )
+}
 
 type Props = { classification?: string; days?: number }
 
@@ -93,23 +128,21 @@ export function InboxList({ classification, days }: Props = {}) {
                   {formatDate(email.received_at)}
                 </span>
                 {expanded === email.id
-                  ? <ChevronUp size={14} style={{ color: 'var(--color-text-muted)' }} />
-                  : <ChevronDown size={14} style={{ color: 'var(--color-text-muted)' }} />
+                  ? <ChevronUp size={14} aria-label="Collapse" style={{ color: 'var(--color-text-muted)' }} />
+                  : <ChevronDown size={14} aria-label="Expand details" style={{ color: 'var(--color-text-muted)' }} />
                 }
               </div>
             </div>
 
             {expanded === email.id && (
               <div style={{ padding: '14px 18px 18px', borderTop: '0.5px solid var(--color-border)' }}>
-                <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: email.draft_reply ? 16 : 0 }}>
-                  {email.full_body ?? email.body_preview}
-                </p>
+                <EmailBody body={email.full_body ?? email.body_preview ?? ''} />
 
                 {email.draft_reply && (
                   <div style={{
                     background: 'rgba(91,127,255,0.05)',
                     border: '0.5px solid rgba(91,127,255,0.2)',
-                    borderRadius: 8, padding: 14,
+                    borderRadius: 8, padding: 14, marginTop: 16,
                   }}>
                     <p className="label" style={{ marginBottom: 8, color: '#5B7FFF' }}>Draft Reply</p>
                     <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>

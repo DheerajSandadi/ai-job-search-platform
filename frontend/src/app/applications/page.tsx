@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useApplications } from '@/lib/hooks/useApplications'
 import { approveApplication, rejectApplication, markApplied } from '@/lib/api'
 import { CheckCircle, XCircle, ExternalLink, FileText, Clock, Check } from 'lucide-react'
@@ -16,6 +16,7 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }
 function ApprovalCard({ app, onAction }: { app: Application; onAction: () => void }) {
   const [loading, setLoading] = useState<string | null>(null)
   const [showResume, setShowResume] = useState(false)
+  const [successMsg, setSuccessMsg] = useState('')
   const job = app.job
   const resume = app.resume
   const style = STATUS_STYLES[app.status] || STATUS_STYLES.pending
@@ -27,6 +28,8 @@ function ApprovalCard({ app, onAction }: { app: Application; onAction: () => voi
       if (result.job_url) {
         window.open(result.job_url, '_blank', 'noopener,noreferrer')
       }
+      setSuccessMsg('Application approved — job page opened!')
+      setTimeout(() => setSuccessMsg(''), 3000)
       onAction()
     } catch (e) {
       console.error(e)
@@ -94,6 +97,7 @@ function ApprovalCard({ app, onAction }: { app: Application; onAction: () => voi
 
       {/* Resume diff toggle */}
       <button
+        aria-label={showResume ? 'Hide tailored resume' : 'View tailored resume'}
         onClick={() => setShowResume(!showResume)}
         style={{
           display: 'flex', alignItems: 'center', gap: 6,
@@ -140,25 +144,36 @@ function ApprovalCard({ app, onAction }: { app: Application; onAction: () => voi
       )}
 
       {/* Action buttons — change based on status */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flexDirection: 'column', alignItems: 'flex-start' }}>
+        {successMsg && (
+          <div style={{
+            fontSize: 12, color: '#15803D', padding: '6px 10px',
+            background: '#DCFCE7', borderRadius: 6,
+          }}>
+            ✓ {successMsg}
+          </div>
+        )}
 
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {app.status === 'pending' && (
           <>
             <button
+              aria-label="Approve application and open job page"
               onClick={handleApprove}
-              disabled={!!loading}
+              disabled={loading === 'approve'}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 background: '#111', color: '#fff', border: 'none',
                 borderRadius: 8, padding: '8px 16px', fontSize: 13,
                 fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-                opacity: loading ? 0.6 : 1
+                opacity: loading === 'approve' ? 0.6 : 1
               }}
             >
               <CheckCircle size={14} />
               {loading === 'approve' ? 'Opening...' : 'Approve & Open Job'}
             </button>
             <button
+              aria-label="Reject application"
               onClick={handleReject}
               disabled={!!loading}
               style={{
@@ -224,12 +239,14 @@ function ApprovalCard({ app, onAction }: { app: Application; onAction: () => voi
         {app.status === 'rejected' && (
           <div style={{ fontSize: 13, color: '#999' }}>Rejected</div>
         )}
+        </div>
       </div>
     </div>
   )
 }
 
 export default function ApplicationsPage() {
+  useEffect(() => { document.title = 'Applications | JobPilot' }, [])
   const { data: applications, mutate, isLoading } = useApplications()
 
   const pending  = (applications || []).filter((a) => a.status === 'pending')

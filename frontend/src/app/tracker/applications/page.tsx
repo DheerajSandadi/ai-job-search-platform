@@ -27,6 +27,8 @@ interface EmailRow {
 }
 
 export default function ApplicationsPage() {
+  useEffect(() => { document.title = 'Applications | JobPilot' }, [])
+
   const [apps, setApps] = useState<TrackerApplication[]>([])
   const [total, setTotal] = useState(0)
   const [filterStatus, setFilterStatus] = useState<string>('all')
@@ -45,6 +47,7 @@ export default function ApplicationsPage() {
   const [newUrl, setNewUrl] = useState('')
   const [newNotes, setNewNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [formErrors, setFormErrors] = useState<{ company_name?: string; role_title?: string }>({})
 
   const load = (status = filterStatus) => {
     setLoading(true)
@@ -92,8 +95,16 @@ export default function ApplicationsPage() {
     }
   }
 
+  const validateForm = () => {
+    const e: { company_name?: string; role_title?: string } = {}
+    if (!newCompany.trim()) e.company_name = 'Company is required'
+    if (!newRole.trim()) e.role_title = 'Role is required'
+    setFormErrors(e)
+    return Object.keys(e).length === 0
+  }
+
   const handleCreate = async () => {
-    if (!newCompany || !newRole) return
+    if (!validateForm()) return
     setSaving(true)
     try {
       await createTrackerApplication({
@@ -104,7 +115,7 @@ export default function ApplicationsPage() {
         notes: newNotes || undefined,
       })
       setShowAddModal(false)
-      setNewCompany(''); setNewRole(''); setNewStatus('applied'); setNewUrl(''); setNewNotes('')
+      setNewCompany(''); setNewRole(''); setNewStatus('applied'); setNewUrl(''); setNewNotes(''); setFormErrors({})
       load()
     } finally {
       setSaving(false)
@@ -241,18 +252,21 @@ export default function ApplicationsPage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={e => e.stopPropagation()}>
                 {app.job_url && (
-                  <a href={app.job_url} target="_blank" rel="noreferrer" style={{ color: '#666', display: 'flex' }}>
+                  <a href={app.job_url} target="_blank" rel="noreferrer" aria-label="Open job listing" style={{ color: '#666', display: 'flex' }}>
                     <ExternalLink size={13} />
                   </a>
                 )}
                 <button
+                  aria-label="Delete application"
                   onClick={() => handleDelete(app.id)}
                   disabled={deleting === app.id}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', display: 'flex', padding: 2 }}
                 >
                   <Trash2 size={13} />
                 </button>
-                {expandedId === app.id ? <ChevronUp size={13} color="#999" /> : <ChevronDown size={13} color="#ccc" />}
+                {expandedId === app.id
+                  ? <ChevronUp size={13} color="#999" aria-hidden="true" />
+                  : <ChevronDown size={13} color="#ccc" aria-hidden="true" />}
               </div>
             </div>
 
@@ -312,25 +326,53 @@ export default function ApplicationsPage() {
             boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
           }} onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 18, fontWeight: 500, marginBottom: 20 }}>Add Application</h2>
-            {[
-              { label: 'Company *', value: newCompany, set: setNewCompany, placeholder: 'e.g. Stripe' },
-              { label: 'Role *',    value: newRole,    set: setNewRole,    placeholder: 'e.g. Software Engineer' },
-              { label: 'Job URL',   value: newUrl,     set: setNewUrl,     placeholder: 'https://...' },
-            ].map(f => (
-              <div key={f.label} style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 6 }}>{f.label}</label>
-                <input
-                  value={f.value}
-                  onChange={e => f.set(e.target.value)}
-                  placeholder={f.placeholder}
-                  style={{
-                    width: '100%', boxSizing: 'border-box',
-                    padding: '8px 12px', borderRadius: 8, fontSize: 13,
-                    border: '0.5px solid rgba(0,0,0,0.2)', outline: 'none', fontFamily: 'inherit',
-                  }}
-                />
-              </div>
-            ))}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 6 }}>Company *</label>
+              <input
+                value={newCompany}
+                onChange={e => { setNewCompany(e.target.value); setFormErrors(prev => ({ ...prev, company_name: '' })) }}
+                placeholder="e.g. Stripe"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '8px 12px', borderRadius: 8, fontSize: 13,
+                  border: formErrors.company_name ? '1px solid #EF4444' : '0.5px solid rgba(0,0,0,0.2)',
+                  outline: 'none', fontFamily: 'inherit',
+                }}
+              />
+              {formErrors.company_name && (
+                <p style={{ fontSize: 11, color: '#EF4444', marginTop: 4 }}>{formErrors.company_name}</p>
+              )}
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 6 }}>Role *</label>
+              <input
+                value={newRole}
+                onChange={e => { setNewRole(e.target.value); setFormErrors(prev => ({ ...prev, role_title: '' })) }}
+                placeholder="e.g. Software Engineer"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '8px 12px', borderRadius: 8, fontSize: 13,
+                  border: formErrors.role_title ? '1px solid #EF4444' : '0.5px solid rgba(0,0,0,0.2)',
+                  outline: 'none', fontFamily: 'inherit',
+                }}
+              />
+              {formErrors.role_title && (
+                <p style={{ fontSize: 11, color: '#EF4444', marginTop: 4 }}>{formErrors.role_title}</p>
+              )}
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 6 }}>Job URL</label>
+              <input
+                value={newUrl}
+                onChange={e => setNewUrl(e.target.value)}
+                placeholder="https://..."
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '8px 12px', borderRadius: 8, fontSize: 13,
+                  border: '0.5px solid rgba(0,0,0,0.2)', outline: 'none', fontFamily: 'inherit',
+                }}
+              />
+            </div>
             <div style={{ marginBottom: 16 }}>
               <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 6 }}>Status</label>
               <select value={newStatus} onChange={e => setNewStatus(e.target.value)} style={{

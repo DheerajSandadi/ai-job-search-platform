@@ -349,3 +349,46 @@ html, body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+
+/* ─── Skeleton shimmer ───────────────────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Mobile nav ─────────────────────────────────────────────────────────── */
+.desktop-nav { display: flex; }
+.mobile-nav { display: none; }
+
+@media (max-width: 768px) {
+  .desktop-nav { display: none !important; }
+  .mobile-nav { display: flex !important; }
+}
+
+/* ─── Responsive job layout ──────────────────────────────────────────────── */
+.jobs-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+}
+
+.jobs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1024px) {
+  .jobs-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .jobs-layout {
+    grid-template-columns: 1fr;
+  }
+  .jobs-grid {
+    grid-template-columns: 1fr;
+  }
+}

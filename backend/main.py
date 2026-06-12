@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from fastapi import FastAPI, Request
+import secrets
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import structlog
 
 from api.routes import jobs, applications, outreach, inbox, analytics, pipelines, settings
@@ -11,6 +13,28 @@ from api.routes.tracker import router as tracker_router
 from scheduler.jobs import start_scheduler, stop_scheduler
 
 logger = structlog.get_logger()
+
+_http_security = HTTPBasic()
+
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(_http_security)) -> str:
+    from core.config import get_settings
+    cfg = get_settings()
+    correct_user = secrets.compare_digest(
+        credentials.username.encode("utf8"),
+        (cfg.DASHBOARD_USERNAME or "admin").encode("utf8"),
+    )
+    correct_pass = secrets.compare_digest(
+        credentials.password.encode("utf8"),
+        (cfg.DASHBOARD_PASSWORD or "jobpilot").encode("utf8"),
+    )
+    if not (correct_user and correct_pass):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 
 @asynccontextmanager
@@ -37,14 +61,15 @@ app.add_middleware(
 )
 
 PREFIX = "/api/v1"
-app.include_router(jobs.router,         prefix=PREFIX)
-app.include_router(applications.router, prefix=PREFIX)
-app.include_router(outreach.router,     prefix=PREFIX)
-app.include_router(inbox.router,        prefix=PREFIX)
-app.include_router(analytics.router,    prefix=PREFIX)
-app.include_router(pipelines.router,    prefix=PREFIX)
-app.include_router(settings.router,     prefix=PREFIX)
-app.include_router(tracker_router,      prefix=PREFIX)
+_auth = [Depends(verify_credentials)]
+app.include_router(jobs.router,         prefix=PREFIX, dependencies=_auth)
+app.include_router(applications.router, prefix=PREFIX, dependencies=_auth)
+app.include_router(outreach.router,     prefix=PREFIX, dependencies=_auth)
+app.include_router(inbox.router,        prefix=PREFIX, dependencies=_auth)
+app.include_router(analytics.router,    prefix=PREFIX, dependencies=_auth)
+app.include_router(pipelines.router,    prefix=PREFIX, dependencies=_auth)
+app.include_router(settings.router,     prefix=PREFIX, dependencies=_auth)
+app.include_router(tracker_router,      prefix=PREFIX, dependencies=_auth)
 app.include_router(auth_router)
 
 

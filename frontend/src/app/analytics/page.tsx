@@ -1,10 +1,11 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { useAnalyticsHistory, useTodayAnalytics } from '@/lib/hooks/useAnalytics'
+import { useAnalyticsHistory } from '@/lib/hooks/useAnalytics'
 import { TrendingUp, Send, MessageSquare, CalendarCheck } from 'lucide-react'
 
 const FALLBACK_HISTORY = [
@@ -24,9 +25,19 @@ const SUMMARY_CARDS = [
   { label: 'Reply Rate',         key: '_reply_rate',            icon: TrendingUp,    color: '#7C3AED', bg: '#FAF5FF' },
 ]
 
+const TIME_RANGES = [
+  { label: 'Today', days: 1 },
+  { label: '7D',    days: 7 },
+  { label: '14D',   days: 14 },
+  { label: '30D',   days: 30 },
+  { label: '90D',   days: 90 },
+]
+
 export default function AnalyticsPage() {
-  const { data: history } = useAnalyticsHistory(7)
-  const { data: today } = useTodayAnalytics()
+  useEffect(() => { document.title = 'Analytics | JobPilot' }, [])
+
+  const [days, setDays] = useState(7)
+  const { data: history } = useAnalyticsHistory(days)
 
   const chartData = history
     ? history.map(d => ({
@@ -62,7 +73,7 @@ export default function AnalyticsPage() {
         Analytics
       </h1>
       <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 24 }}>
-        7-day performance summary · updated in real time
+        Performance summary · updated in real time
       </p>
 
       {/* Summary cards */}
@@ -77,6 +88,22 @@ export default function AnalyticsPage() {
             </p>
             <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 4 }}>{label}</p>
           </div>
+        ))}
+      </div>
+
+      {/* Time range selector */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {TIME_RANGES.map(r => (
+          <button key={r.days} onClick={() => setDays(r.days)} style={{
+            padding: '5px 12px', borderRadius: 6, fontSize: 12,
+            fontWeight: 500, cursor: 'pointer', border: '0.5px solid',
+            fontFamily: 'inherit',
+            background: days === r.days ? '#111' : 'transparent',
+            color: days === r.days ? '#fff' : '#666',
+            borderColor: days === r.days ? '#111' : 'rgba(0,0,0,0.15)',
+          }}>
+            {r.label}
+          </button>
         ))}
       </div>
 
@@ -95,9 +122,9 @@ export default function AnalyticsPage() {
               cursor={{ fill: 'rgba(0,0,0,0.02)' }}
             />
             <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} iconType="circle" iconSize={6} />
-            <Bar dataKey="apps"      name="Applications" fill="#111"     radius={[3, 3, 0, 0]} />
-            <Bar dataKey="replies"   name="Replies"      fill="#22C55E"  radius={[3, 3, 0, 0]} />
-            <Bar dataKey="interviews" name="Interviews"  fill="#F59E0B"  radius={[3, 3, 0, 0]} />
+            <Bar dataKey="apps"       name="Applications" fill="#111"     radius={[3, 3, 0, 0]} />
+            <Bar dataKey="replies"    name="Replies"      fill="#22C55E"  radius={[3, 3, 0, 0]} />
+            <Bar dataKey="interviews" name="Interviews"   fill="#F59E0B"  radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

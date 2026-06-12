@@ -34,6 +34,8 @@ const getBackfillStatus  = () => api.get('/api/v1/tracker/backfill/status').then
 const startBackfill      = (force = false) => api.post(`/api/v1/tracker/backfill?force=${force}`).then(r => r.data)
 
 export default function TrackerPage() {
+  useEffect(() => { document.title = 'Job Tracker | JobPilot' }, [])
+
   const [overview, setOverview]       = useState<Record<string, number> | null>(null)
   const [activity, setActivity]       = useState<Record<string, number>[]>([])
   const [companies, setCompanies]     = useState<{ company: string; count: number }[]>([])

@@ -25,6 +25,7 @@ export function SearchBar({ value, onChange, onSearch }: Props) {
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '8px 16px', flex: 1, minWidth: 0 }}>
         <span className="label" style={{ marginBottom: 3 }}>Role / Keywords</span>
         <input
+          aria-label="Role or keywords"
           className="field-input"
           placeholder="e.g. Software Engineer"
           value={value.role}
@@ -39,6 +40,7 @@ export function SearchBar({ value, onChange, onSearch }: Props) {
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '8px 16px', flex: 1, minWidth: 0 }}>
         <span className="label" style={{ marginBottom: 3 }}>Location</span>
         <input
+          aria-label="Location"
           className="field-input"
           placeholder="e.g. San Francisco, Remote"
           value={value.location}
@@ -52,7 +54,7 @@ export function SearchBar({ value, onChange, onSearch }: Props) {
       {/* Job Type */}
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '8px 16px', flex: 1, minWidth: 0 }}>
         <span className="label" style={{ marginBottom: 3 }}>Job Type</span>
-        <select className="field-select" value={value.jobType} onChange={set('jobType')}>
+        <select aria-label="Job type" className="field-select" value={value.jobType} onChange={set('jobType')}>
           <option value="">Any type</option>
           <option value="full-time">Full-time</option>
           <option value="part-time">Part-time</option>
@@ -66,7 +68,7 @@ export function SearchBar({ value, onChange, onSearch }: Props) {
       {/* Source */}
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '8px 16px', flex: 1, minWidth: 0 }}>
         <span className="label" style={{ marginBottom: 3 }}>Source Board</span>
-        <select className="field-select" value={value.source} onChange={set('source')}>
+        <select aria-label="Job source board" className="field-select" value={value.source} onChange={set('source')}>
           <option value="">All sources</option>
           <option value="linkedin">LinkedIn</option>
           <option value="indeed">Indeed</option>

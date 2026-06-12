@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useInbox } from '@/lib/hooks/useInbox'
 import { useEmailThreads } from '@/lib/hooks/useEmailThreads'
 import { updateThreadStage, triggerInboxPipeline } from '@/lib/api'
@@ -127,6 +127,8 @@ function KanbanBoard({ days }: { days: number }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function InboxPage() {
+  useEffect(() => { document.title = 'Inbox | JobPilot' }, [])
+
   const [view, setView]                       = useState<'list' | 'kanban'>('list')
   const [days, setDays]                       = useState(30)
   const [classification, setClassification]   = useState<string | undefined>(undefined)

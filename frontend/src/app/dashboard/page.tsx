@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -8,8 +8,7 @@ import { Briefcase, FileCheck, MessageSquare, CalendarCheck, Play, RotateCcw, Lo
 import { useTodayAnalytics, useAnalyticsHistory } from '@/lib/hooks/useAnalytics'
 import { usePipelineStatus } from '@/lib/hooks/usePipeline'
 import { triggerMorningPipeline, triggerRetryPipeline } from '@/lib/api'
-
-const FALLBACK_TODAY = { jobs_discovered: 12, applications_submitted: 4, recruiter_replies: 2, interviews_scheduled: 1 }
+import { Skeleton } from '@/components/ui/Skeleton'
 
 const FALLBACK_HISTORY = [
   { date: '05-31', Applications: 3, Replies: 0, Interviews: 0 },
@@ -29,12 +28,13 @@ const STAT_CARDS = [
 ] as const
 
 export default function DashboardPage() {
-  const { data: today }   = useTodayAnalytics()
+  useEffect(() => { document.title = 'Dashboard | JobPilot' }, [])
+
+  const { data: today, isLoading: todayLoading } = useTodayAnalytics()
   const { data: history } = useAnalyticsHistory(7)
   const { data: status, mutate } = usePipelineStatus()
   const [loading, setLoading] = useState<'morning' | 'retry' | null>(null)
 
-  const stats = today ?? FALLBACK_TODAY
   const morningStatus = status?.morning.status ?? 'idle'
 
   const chartData = history
@@ -47,6 +47,10 @@ export default function DashboardPage() {
     : FALLBACK_HISTORY
 
   async function trigger(type: 'morning' | 'retry') {
+    const msg = type === 'morning'
+      ? 'Run morning pipeline?\n\nThis will discover new jobs, tailor resumes for approved applications, and trigger outreach. The pipeline runs in the background for ~60 seconds.'
+      : 'Run retry pipeline?\n\nThis will retry all failed applications (retry_count < 3).'
+    if (!confirm(msg)) return
     setLoading(type)
     try {
       if (type === 'morning') await triggerMorningPipeline()
@@ -64,7 +68,14 @@ export default function DashboardPage() {
         Welcome back, Dheeraj
       </h1>
       <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 24 }}>
-        {stats.jobs_discovered} new matches today · Pipeline: {morningStatus} · ATS Score: 91/100
+        {todayLoading
+          ? 'Loading...'
+          : today?.jobs_discovered != null
+            ? `${today.jobs_discovered} new matches today`
+            : '—'
+        }
+        {' · '}Pipeline: {morningStatus}
+        {' · '}ATS Score: 91/100
       </p>
 
       {/* Stats grid */}
@@ -84,9 +95,15 @@ export default function DashboardPage() {
             >
               <Icon size={18} style={{ color }} strokeWidth={1.8} />
             </div>
-            <p style={{ fontSize: 28, fontWeight: 500, color: 'var(--color-text-primary)', marginTop: 12, lineHeight: 1 }}>
-              {stats[key]}
-            </p>
+            <div style={{ marginTop: 12, lineHeight: 1 }}>
+              {todayLoading || !today ? (
+                <Skeleton height={28} width={60} />
+              ) : (
+                <p style={{ fontSize: 28, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1 }}>
+                  {today[key] ?? '—'}
+                </p>
+              )}
+            </div>
             <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 4 }}>{label}</p>
           </div>
         ))}

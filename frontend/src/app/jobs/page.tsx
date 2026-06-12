@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { SearchBar } from '@/components/jobs/SearchBar'
 import { FilterPanel } from '@/components/jobs/FilterPanel'
 import { JobCard } from '@/components/jobs/JobCard'
@@ -22,6 +22,8 @@ interface FilterState {
 }
 
 export default function JobsPage() {
+  useEffect(() => { document.title = 'Find Jobs | JobPilot' }, [])
+
   const { data: apiJobs, isLoading } = useJobs()
   const jobs = apiJobs ?? []
 
@@ -64,21 +66,31 @@ export default function JobsPage() {
       </div>
 
       {/* Body: filter panel + job grid */}
-      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+      <div className="jobs-layout">
         <FilterPanel value={filters} onChange={setFilters} />
 
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ minWidth: 0 }}>
           {featuredJob && (
             <div style={{ marginBottom: 16 }}>
-              <p className="label" style={{ marginBottom: 8 }}>Top Match</p>
+              <h2 style={{
+                fontSize: 11, fontWeight: 500, color: '#999',
+                textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10,
+              }}>
+                Top Match
+              </h2>
               <JobCard job={featuredJob} featured />
             </div>
           )}
 
           {regularJobs.length > 0 && (
             <div>
-              <p className="label" style={{ marginBottom: 8 }}>All Matches</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <h2 style={{
+                fontSize: 11, fontWeight: 500, color: '#999',
+                textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10,
+              }}>
+                All Matches ({regularJobs.length})
+              </h2>
+              <div className="jobs-grid">
                 {regularJobs.map(job => (
                   <JobCard key={job.id} job={job} />
                 ))}

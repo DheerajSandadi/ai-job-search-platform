@@ -30,7 +30,17 @@ async def list_jobs(
         query = query.order("created_at", desc=True)
         query = query.range((page - 1) * page_size, page * page_size - 1)
         result = query.execute()
-        return result.data
+        seen: set[tuple[str, str]] = set()
+        deduped = []
+        for job in result.data:
+            key = (
+                (job.get('company') or '').lower().strip(),
+                (job.get('title') or '').lower().strip(),
+            )
+            if key not in seen:
+                seen.add(key)
+                deduped.append(job)
+        return deduped
     except HTTPException:
         raise
     except Exception as e:

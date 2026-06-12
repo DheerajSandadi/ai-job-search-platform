@@ -28,10 +28,12 @@ function SelectInput({
   value,
   onChange,
   children,
+  ariaLabel,
 }: {
   value: string
   onChange: (v: string) => void
   children: React.ReactNode
+  ariaLabel?: string
 }) {
   return (
     <div
@@ -45,6 +47,7 @@ function SelectInput({
       }}
     >
       <select
+        aria-label={ariaLabel}
         className="field-select"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -85,7 +88,7 @@ export function FilterPanel({ value, onChange }: Props) {
 
       {/* Source */}
       <FilterGroup label="Source">
-        <SelectInput value={value.source} onChange={set('source')}>
+        <SelectInput ariaLabel="Filter by source" value={value.source} onChange={set('source')}>
           <option value="">All sources</option>
           <option value="linkedin">LinkedIn</option>
           <option value="indeed">Indeed</option>
@@ -96,7 +99,7 @@ export function FilterPanel({ value, onChange }: Props) {
 
       {/* Job type */}
       <FilterGroup label="Job Type">
-        <SelectInput value={value.jobType} onChange={set('jobType')}>
+        <SelectInput ariaLabel="Filter by job type" value={value.jobType} onChange={set('jobType')}>
           <option value="">Any type</option>
           <option value="full-time">Full-time</option>
           <option value="part-time">Part-time</option>
@@ -108,7 +111,9 @@ export function FilterPanel({ value, onChange }: Props) {
       {/* Min AI Score */}
       <FilterGroup label={`Min AI Score — ${(value.minScore * 100).toFixed(0)}%`}>
         <input
+          id="score-range"
           type="range"
+          aria-label="Minimum AI score filter"
           className="score-slider"
           min={0}
           max={1}
@@ -124,7 +129,7 @@ export function FilterPanel({ value, onChange }: Props) {
 
       {/* Status */}
       <FilterGroup label="Status">
-        <SelectInput value={value.status} onChange={(v) => set('status')(v as JobStatus | '')}>
+        <SelectInput ariaLabel="Filter by status" value={value.status} onChange={(v) => set('status')(v as JobStatus | '')}>
           <option value="">All statuses</option>
           <option value="discovered">Discovered</option>
           <option value="scored">Scored</option>

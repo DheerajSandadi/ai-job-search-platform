@@ -17,6 +17,10 @@ import type {
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001",
+  auth: {
+    username: process.env.NEXT_PUBLIC_API_USERNAME ?? "admin",
+    password: process.env.NEXT_PUBLIC_API_PASSWORD ?? "jobpilot",
+  },
 });
 
 const BASE = "/api/v1";
