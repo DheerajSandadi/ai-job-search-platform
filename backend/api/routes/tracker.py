@@ -26,6 +26,21 @@ _classify_state: dict = {"running": False, "processed": 0, "total": 0}
 
 STAGE_PRIORITY = {"applied": 1, "screen": 2, "interview": 3, "offer": 4, "rejected": 5}
 
+# Maps email classification → pipeline stage
+CLF_TO_STAGE = {
+    "application_confirmation": "applied",
+    "recruiter_reply":          "screen",
+    "interview_request":        "interview",
+    "interview_invite":         "interview",
+    "offer":                    "offer",
+    "rejection":                "rejected",
+    "rejected":                 "rejected",
+    "followup_needed":          "applied",
+    "follow_up_needed":         "applied",
+}
+
+_backfill_state: dict = {"running": False, "processed": 0, "total": 0, "created": 0}
+
 CLASSIFY_PROMPT = """You are an AI assistant helping a job seeker track their job applications via email.
 
 Analyze the following email and extract structured information.
@@ -571,3 +586,134 @@ def _do_sync():
         logger.info("tracker.sync.complete")
     except Exception as e:
         logger.error("tracker.sync.error", error=str(e))
+
+
+# ─── BACKFILL ────────────────────────────────────────────────────────────────
+
+@router.get("/tracker/backfill/status")
+async def get_backfill_status():
+    return _backfill_state
+
+
+@router.post("/tracker/backfill")
+async def start_backfill(background_tasks: BackgroundTasks, force: bool = Query(False)):
+    """
+    Build tracker_applications from already-classified inbox_emails.
+    Reads emails that have company_name set, groups by (company_name, role_title),
+    creates one tracker_application per unique job, links emails via application_id.
+    Use force=true to re-run even if applications already exist.
+    """
+    if _backfill_state["running"]:
+        return {"status": "already_running", **_backfill_state}
+
+    sb = get_supabase_client()
+    count_res = sb.table("inbox_emails").select("id", count="exact").not_.is_(
+        "company_name", "null"
+    ).execute()
+    total = count_res.count or len(count_res.data)
+    _backfill_state.update({"total": total, "processed": 0, "created": 0})
+
+    background_tasks.add_task(_run_backfill, force)
+    return {"status": "started", "emails_with_company": total}
+
+
+def _run_backfill(force: bool = False):
+    _backfill_state["running"] = True
+    try:
+        sb = get_supabase_client()
+        # Load all emails that have company_name
+        page_size = 500
+        offset = 0
+        # company+role → {"app_id": str, "status": str, "latest_at": str, "count": int}
+        app_map: dict[tuple, dict] = {}
+
+        while True:
+            batch = sb.table("inbox_emails").select(
+                "id, company_name, role_title, classification, received_at, thread_id, application_id"
+            ).not_.is_("company_name", "null").order(
+                "received_at", desc=False
+            ).range(offset, offset + page_size - 1).execute()
+
+            if not batch.data:
+                break
+
+            for email in batch.data:
+                company = (email.get("company_name") or "").strip()
+                role = (email.get("role_title") or "Unknown Role").strip()
+                clf = email.get("classification") or ""
+                stage = CLF_TO_STAGE.get(clf, "applied")
+                key = (company.lower(), role.lower())
+
+                if key not in app_map:
+                    app_map[key] = {
+                        "company_name": company,
+                        "role_title": role,
+                        "status": stage,
+                        "latest_at": email.get("received_at"),
+                        "count": 1,
+                        "email_ids": [email["id"]],
+                    }
+                else:
+                    existing_priority = STAGE_PRIORITY.get(app_map[key]["status"], 0)
+                    new_priority = STAGE_PRIORITY.get(stage, 0)
+                    if new_priority > existing_priority:
+                        app_map[key]["status"] = stage
+                    app_map[key]["latest_at"] = email.get("received_at")
+                    app_map[key]["count"] += 1
+                    app_map[key]["email_ids"].append(email["id"])
+
+            _backfill_state["processed"] += len(batch.data)
+            offset += page_size
+            if len(batch.data) < page_size:
+                break
+
+        logger.info("tracker.backfill.grouped", unique_jobs=len(app_map))
+
+        # Upsert tracker_applications and link email_ids
+        for key, data in app_map.items():
+            try:
+                # Check if already exists (unless force)
+                if not force:
+                    existing = sb.table("tracker_applications").select("id").eq(
+                        "company_name", data["company_name"]
+                    ).eq("role_title", data["role_title"]).execute()
+                    if existing.data:
+                        app_id = existing.data[0]["id"]
+                        # Still link emails that aren't linked yet
+                        sb.table("inbox_emails").update({"application_id": app_id}).in_(
+                            "id", data["email_ids"]
+                        ).is_("application_id", "null").execute()
+                        continue
+
+                result = sb.table("tracker_applications").insert({
+                    "company_name": data["company_name"],
+                    "role_title": data["role_title"],
+                    "status": data["status"],
+                    "applied_date": data["latest_at"],
+                    "source": "gmail_auto",
+                    "email_count": data["count"],
+                    "latest_email_at": data["latest_at"],
+                }).execute()
+
+                if result.data:
+                    app_id = result.data[0]["id"]
+                    # Link all emails in batches of 100
+                    ids = data["email_ids"]
+                    for i in range(0, len(ids), 100):
+                        sb.table("inbox_emails").update({"application_id": app_id}).in_(
+                            "id", ids[i:i + 100]
+                        ).execute()
+                    _backfill_state["created"] += 1
+
+            except Exception as e:
+                logger.error("tracker.backfill.upsert_error",
+                             company=data["company_name"], error=str(e))
+                continue
+
+        logger.info("tracker.backfill.complete",
+                    created=_backfill_state["created"],
+                    processed=_backfill_state["processed"])
+    except Exception as e:
+        logger.error("tracker.backfill.run_error", error=str(e))
+    finally:
+        _backfill_state["running"] = False

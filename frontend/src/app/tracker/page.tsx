@@ -2,14 +2,14 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   getTrackerDashboardOverview, getTrackerActivity, getTrackerTopCompanies,
-  getTrackerEmailStats, getTrackerClassifyStatus, startTrackerClassification,
-  syncTrackerGmail,
+  getTrackerEmailStats, getTrackerClassifyStatus, syncTrackerGmail,
 } from '@/lib/api'
+import api from '@/lib/api'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { Briefcase, TrendingUp, Trophy, X, CheckCircle, AlertCircle, RefreshCw, Sparkles } from 'lucide-react'
+import { Briefcase, TrendingUp, Trophy, X, CheckCircle, AlertCircle, RefreshCw, Database } from 'lucide-react'
 
 const ACTIVITY_RANGES = [
   { label: 'Today', days: 1 }, { label: '7D', days: 7 },
@@ -18,26 +18,29 @@ const ACTIVITY_RANGES = [
 
 const CLF_COLORS: Record<string, string> = {
   application_confirmation: '#6366f1',
-  recruiter_reply: '#3b82f6',
-  interview_request: '#22C55E',
-  interview_invite: '#22C55E',
-  offer: '#f59e0b',
-  rejection: '#ef4444',
-  rejected: '#ef4444',
-  followup_needed: '#f97316',
-  follow_up_needed: '#f97316',
-  irrelevant: '#94a3b8',
-  unrelated: '#94a3b8',
+  recruiter_reply:          '#3b82f6',
+  interview_request:        '#22C55E',
+  interview_invite:         '#22C55E',
+  offer:                    '#f59e0b',
+  rejection:                '#ef4444',
+  rejected:                 '#ef4444',
+  followup_needed:          '#f97316',
+  follow_up_needed:         '#f97316',
+  irrelevant:               '#94a3b8',
+  unrelated:                '#94a3b8',
 }
 
+const getBackfillStatus  = () => api.get('/api/v1/tracker/backfill/status').then(r => r.data)
+const startBackfill      = (force = false) => api.post(`/api/v1/tracker/backfill?force=${force}`).then(r => r.data)
+
 export default function TrackerPage() {
-  const [overview, setOverview] = useState<Record<string, number> | null>(null)
-  const [activity, setActivity] = useState<Record<string, number>[]>([])
-  const [companies, setCompanies] = useState<{ company: string; count: number }[]>([])
-  const [emailStats, setEmailStats] = useState<{ by_classification: Record<string, number> } | null>(null)
-  const [classifyStatus, setClassifyStatus] = useState<Record<string, number | boolean> | null>(null)
-  const [classifying, setClassifying] = useState(false)
-  const [syncing, setSyncing] = useState(false)
+  const [overview, setOverview]       = useState<Record<string, number> | null>(null)
+  const [activity, setActivity]       = useState<Record<string, number>[]>([])
+  const [companies, setCompanies]     = useState<{ company: string; count: number }[]>([])
+  const [emailStats, setEmailStats]   = useState<{ by_classification: Record<string, number> } | null>(null)
+  const [backfillState, setBackfill]  = useState<Record<string, number | boolean> | null>(null)
+  const [building, setBuilding]       = useState(false)
+  const [syncing, setSyncing]         = useState(false)
   const [activityDays, setActivityDays] = useState(30)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -52,33 +55,30 @@ export default function TrackerPage() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
   }
 
+  const startPolling = () => {
+    pollRef.current = setInterval(async () => {
+      const s = await getBackfillStatus()
+      setBackfill(s)
+      if (!s.running) { stopPolling(); setBuilding(false); loadAll() }
+    }, 2000)
+  }
+
   useEffect(() => {
     loadAll()
-    getTrackerClassifyStatus().then((s: Record<string, number | boolean>) => {
-      setClassifyStatus(s)
-      if (s?.running) {
-        setClassifying(true)
-        pollRef.current = setInterval(async () => {
-          const status = await getTrackerClassifyStatus()
-          setClassifyStatus(status)
-          if (!status.running) { stopPolling(); setClassifying(false); loadAll() }
-        }, 3000)
-      }
+    getBackfillStatus().then((s: Record<string, number | boolean>) => {
+      setBackfill(s)
+      if (s?.running) { setBuilding(true); startPolling() }
     })
     return stopPolling
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleClassify = async () => {
-    if (classifying) return
-    const r = await startTrackerClassification()
+  const handleBuildApps = async () => {
+    if (building) return
+    const r = await startBackfill(false)
     if (r.status === 'started' || r.status === 'already_running') {
-      setClassifying(true)
-      pollRef.current = setInterval(async () => {
-        const s = await getTrackerClassifyStatus()
-        setClassifyStatus(s)
-        if (!s.running) { stopPolling(); setClassifying(false); loadAll() }
-      }, 3000)
+      setBuilding(true)
+      startPolling()
     }
   }
 
@@ -102,8 +102,10 @@ export default function TrackerPage() {
     { label: 'Follow-ups Due',      value: overview.followups_due,       color: '#f97316', Icon: AlertCircle },
   ] : []
 
-  const unclassified = classifyStatus
-    ? (classifyStatus.unclassified as number) || 0
+  const needsBuild = overview && overview.total_applications === 0 && !building
+
+  const buildPct = backfillState && (backfillState.total as number) > 0
+    ? Math.round(((backfillState.processed as number) / (backfillState.total as number)) * 100)
     : 0
 
   return (
@@ -125,31 +127,51 @@ export default function TrackerPage() {
             <RefreshCw size={13} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
             {syncing ? 'Syncing...' : 'Sync Gmail'}
           </button>
-          <button onClick={handleClassify} disabled={classifying} style={{
+          <button onClick={handleBuildApps} disabled={building} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             background: '#111', color: '#fff', border: 'none',
             borderRadius: 8, padding: '7px 14px', fontSize: 13,
-            fontWeight: 500, cursor: classifying ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit', opacity: classifying ? 0.6 : 1,
+            fontWeight: 500, cursor: building ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit', opacity: building ? 0.7 : 1,
           }}>
-            <Sparkles size={13} />
-            {classifying
-              ? `Classifying... (${(classifyStatus?.processed as number) || 0})`
-              : 'Classify Emails'}
+            <Database size={13} />
+            {building
+              ? `Building... ${backfillState?.processed ?? 0} / ${backfillState?.total ?? '?'}`
+              : 'Build Applications'}
           </button>
         </div>
       </div>
 
-      {/* Classification progress banner */}
-      {unclassified > 0 && !classifying && (
+      {/* Build progress bar */}
+      {building && (
         <div style={{
-          background: '#FEF9C3', border: '0.5px solid #FDE047',
-          borderRadius: 10, padding: '10px 16px', marginBottom: 20,
-          fontSize: 13, color: '#A16207', display: 'flex', alignItems: 'center', gap: 8,
+          background: '#EDE9FE', border: '0.5px solid #C4B5FD',
+          borderRadius: 10, padding: '12px 16px', marginBottom: 20,
         }}>
-          <AlertCircle size={14} />
-          <strong>{unclassified.toLocaleString()} emails</strong> pending classification.
-          Click &ldquo;Classify Emails&rdquo; to process them.
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 13, color: '#6D28D9', fontWeight: 500 }}>
+              Building applications from {(backfillState?.total as number || 0).toLocaleString()} emails…
+            </span>
+            <span style={{ fontSize: 13, color: '#6D28D9' }}>{buildPct}%</span>
+          </div>
+          <div style={{ height: 4, background: '#DDD6FE', borderRadius: 2 }}>
+            <div style={{ height: '100%', width: `${buildPct}%`, background: '#7C3AED', borderRadius: 2, transition: 'width 0.3s' }} />
+          </div>
+          <div style={{ fontSize: 11, color: '#8B5CF6', marginTop: 6 }}>
+            {(backfillState?.created as number || 0)} unique jobs found so far
+          </div>
+        </div>
+      )}
+
+      {/* One-time setup banner */}
+      {needsBuild && (
+        <div style={{
+          background: '#EDE9FE', border: '0.5px solid #C4B5FD',
+          borderRadius: 10, padding: '10px 16px', marginBottom: 20,
+          fontSize: 13, color: '#6D28D9', display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <Database size={14} />
+          Click <strong>Build Applications</strong> to populate your pipeline from {(emailStats?.by_classification?.application_confirmation || 0).toLocaleString()} existing job emails.
         </div>
       )}
 
