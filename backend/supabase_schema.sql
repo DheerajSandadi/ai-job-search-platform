@@ -150,6 +150,39 @@ create table if not exists settings (
 alter table settings add column if not exists gmail_access_token  text;
 alter table settings add column if not exists gmail_refresh_token text;
 
+-- ─── gmail tracker integration ───────────────────────────────────────────────
+ALTER TABLE inbox_emails
+ADD COLUMN IF NOT EXISTS pipeline_stage TEXT DEFAULT 'classified'
+    CHECK (pipeline_stage IN ('classified','screening','interview','offer','rejected'));
+
+ALTER TABLE inbox_emails
+ADD COLUMN IF NOT EXISTS company_name TEXT,
+ADD COLUMN IF NOT EXISTS role_title   TEXT;
+
+-- thread_id already exists in inbox_emails (was NOT NULL); index it if missing
+CREATE INDEX IF NOT EXISTS idx_inbox_emails_thread_id ON inbox_emails(thread_id);
+
+CREATE TABLE IF NOT EXISTS email_threads (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    thread_id      TEXT UNIQUE NOT NULL,
+    company_name   TEXT,
+    role_title     TEXT,
+    pipeline_stage TEXT DEFAULT 'classified'
+        CHECK (pipeline_stage IN ('classified','screening','interview','offer','rejected')),
+    email_count    INT DEFAULT 1,
+    last_email_at  TIMESTAMPTZ,
+    last_subject   TEXT,
+    last_sender    TEXT,
+    has_draft_reply BOOLEAN DEFAULT FALSE,
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_threads_pipeline_stage
+    ON email_threads(pipeline_stage);
+CREATE INDEX IF NOT EXISTS idx_email_threads_updated_at
+    ON email_threads(updated_at DESC);
+
 -- ─── manual-apply workflow columns ───────────────────────────────────────────
 alter table applications add column if not exists submitted_at  timestamptz;
 alter table applications add column if not exists approved_at   timestamptz;
