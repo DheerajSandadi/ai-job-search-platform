@@ -282,7 +282,7 @@ async def find_recruiters_node(state: PipelineState) -> PipelineState:
                         "company": rec.get("company", ""),
                         "email": rec.get("email"),
                         "linkedin_url": rec.get("linkedin_url"),
-                        "source": "vibe_prospecting",
+                        "source": "apollo",
                     }).execute()
                     all_recruiters.append({**rec, "_job": job})
                 except Exception as exc:

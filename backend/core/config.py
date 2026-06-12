@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     GMAIL_REDIRECT_URI: str = "http://localhost:8001/auth/gmail/callback"
     GMAIL_USER_EMAIL: str = ""
 
-    VIBE_PROSPECTING_API_KEY: str = ""
+    APOLLO_API_KEY: str = ""
     APIFY_API_KEY: str = ""
 
     GOOGLE_CLOUD_PROJECT_ID: str = ""

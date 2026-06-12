@@ -4,14 +4,14 @@ import json
 import structlog
 from core.anthropic_client import anthropic_client, HAIKU
 from agents.recruiter.prompts import FIND_SYSTEM, FIND_USER
-from integrations.vibe_prospecting import get_vibe_client
+from integrations.apollo_client import get_apollo_client
 
 logger = structlog.get_logger()
 
 
 def find_recruiters(company: str, role: str, limit: int = 10) -> list[dict]:
-    """Find recruiters at a company via Vibe Prospecting."""
-    client = get_vibe_client()
+    """Find recruiters at a company via Apollo.io."""
+    client = get_apollo_client()
     raw = client.search_recruiters(company, limit=limit)
     if not raw:
         logger.warning("no_recruiters_found", company=company)
