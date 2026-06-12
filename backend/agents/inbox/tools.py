@@ -56,10 +56,10 @@ def fetch_unread_emails(max_results: int = 20) -> list[dict]:
             emails.append({
                 "id": msg_id,
                 "thread_id": msg.get("threadId", ""),
-                "from_address": headers.get("From", ""),
+                "sender_email": headers.get("From", ""),
                 "subject": headers.get("Subject", "(no subject)"),
-                "snippet": msg.get("snippet", ""),
-                "body": body,
+                "body_preview": msg.get("snippet", ""),
+                "full_body": body,
                 "labels": msg.get("labelIds", []),
                 "received_at": received_at,
             })
@@ -91,9 +91,9 @@ def classify_email(email: dict) -> dict:
             model=HAIKU,
             system=CLASSIFY_SYSTEM,
             user=CLASSIFY_USER.format(
-                from_address=email.get("from_address", ""),
+                from_address=email.get("sender_email") or email.get("from_address", ""),
                 subject=email.get("subject", ""),
-                body=(email.get("body") or email.get("snippet", ""))[:2000],
+                body=(email.get("full_body") or email.get("body_preview") or email.get("body") or "")[:2000],
             ),
             max_tokens=128,
         )
@@ -121,9 +121,9 @@ def draft_reply(email: dict) -> str | None:
             model=SONNET,
             system=DRAFT_REPLY_SYSTEM,
             user=DRAFT_REPLY_USER.format(
-                from_address=email.get("from_address", ""),
+                from_address=email.get("sender_email") or email.get("from_address", ""),
                 subject=email.get("subject", ""),
-                body=(email.get("body") or email.get("snippet", ""))[:3000],
+                body=(email.get("full_body") or email.get("body_preview") or email.get("body") or "")[:3000],
             ),
             max_tokens=512,
         )

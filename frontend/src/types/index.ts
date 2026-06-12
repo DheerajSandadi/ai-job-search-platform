@@ -128,14 +128,21 @@ export interface Outreach {
 
 export interface InboxEmail {
   id: string;
-  thread_id: string;
-  from_address: string;
-  subject: string;
-  snippet: string;
-  body: string | null;
+  gmail_message_id: string | null;
+  thread_id: string | null;
+  sender_email: string;
+  sender_name: string | null;
+  subject: string | null;
+  body_preview: string | null;
+  full_body: string | null;
   received_at: string;
   classification: EmailClassification | null;
+  pipeline_stage: string | null;
   draft_reply: string | null;
+  company_name: string | null;
+  role_title: string | null;
+  reply_sent: boolean;
+  reply_sent_at: string | null;
   labels: string[];
 }
 

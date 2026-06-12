@@ -69,9 +69,10 @@ def migrate():
                 continue
 
             raw_sender = email.get("sender") or ""
-            sender_name = raw_sender.split("<")[0].strip()
+            sender_name = raw_sender.split("<")[0].strip().strip('"')
 
             sb.table("inbox_emails").insert({
+                "id":               str(email["id"]),
                 "gmail_message_id": str(email["id"]),
                 "thread_id":        email.get("thread_id"),
                 "sender_email":     raw_sender,
@@ -86,6 +87,7 @@ def migrate():
                 "role_title":       email.get("role_title"),
                 "received_at":      email["received_at"].isoformat() if email.get("received_at") else None,
                 "processed_at":     datetime.now(timezone.utc).isoformat(),
+                "reply_sent":       False,
             }).execute()
             migrated += 1
 

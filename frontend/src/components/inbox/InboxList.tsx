@@ -79,7 +79,7 @@ export function InboxList() {
               <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {email.subject}
               </p>
-              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{email.from_address}</p>
+              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{email.sender_name || email.sender_email}</p>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
@@ -97,7 +97,7 @@ export function InboxList() {
           {expanded === email.id && (
             <div style={{ padding: '16px 20px 20px', borderTop: '0.5px solid var(--color-border)' }}>
               <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: email.draft_reply ? 16 : 0 }}>
-                {email.body ?? email.snippet}
+                {email.full_body ?? email.body_preview}
               </p>
 
               {email.draft_reply && (

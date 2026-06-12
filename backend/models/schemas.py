@@ -179,14 +179,21 @@ class Outreach(OutreachCreate):
 
 class InboxEmail(BaseModel):
     id: str
-    thread_id: str
-    from_address: str
-    subject: str
-    snippet: str
-    body: str | None = None
+    gmail_message_id: str | None = None
+    thread_id: str | None = None
+    sender_email: str
+    sender_name: str | None = None
+    subject: str | None = None
+    body_preview: str | None = None
+    full_body: str | None = None
     received_at: datetime
     classification: EmailClassification | None = None
+    pipeline_stage: str | None = None
     draft_reply: str | None = None
+    company_name: str | None = None
+    role_title: str | None = None
+    reply_sent: bool = False
+    reply_sent_at: datetime | None = None
     labels: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}

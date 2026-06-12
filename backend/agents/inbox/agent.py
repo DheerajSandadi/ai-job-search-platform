@@ -40,16 +40,22 @@ def run(mark_as_read: bool = True) -> list[dict]:
 
         try:
             sb.table("inbox_emails").upsert({
-                "id":             email["id"],
-                "thread_id":      email["thread_id"],
-                "from_address":   email["from_address"],
-                "subject":        email["subject"],
-                "snippet":        email["snippet"],
-                "body":           email.get("body"),
-                "received_at":    email["received_at"],
-                "classification": email["classification"],
-                "draft_reply":    email.get("draft_reply"),
-                "labels":         email.get("labels", []),
+                "id":               email["id"],
+                "gmail_message_id": email["id"],
+                "thread_id":        email.get("thread_id"),
+                "sender_email":     email.get("sender_email") or email.get("from_address", ""),
+                "sender_name":      email.get("sender_name"),
+                "subject":          email.get("subject"),
+                "body_preview":     (email.get("body_preview") or email.get("snippet") or "")[:500],
+                "full_body":        email.get("full_body") or email.get("body"),
+                "received_at":      email["received_at"],
+                "classification":   email["classification"],
+                "pipeline_stage":   email.get("pipeline_stage") or email.get("classification", "classified"),
+                "draft_reply":      email.get("draft_reply"),
+                "company_name":     email.get("company_name"),
+                "role_title":       email.get("role_title"),
+                "reply_sent":       False,
+                "labels":           email.get("labels", []),
             }, on_conflict="id").execute()
         except Exception as exc:
             logger.error("inbox_persist_failed", msg_id=email["id"], error=str(exc))

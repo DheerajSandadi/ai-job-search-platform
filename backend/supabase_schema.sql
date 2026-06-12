@@ -117,17 +117,25 @@ create index if not exists pipeline_runs_started_at_idx on pipeline_runs (starte
 
 -- ─── inbox_emails ─────────────────────────────────────────────────────────────
 create table if not exists inbox_emails (
-  id              text primary key,          -- Gmail message ID
-  thread_id       text not null,
-  from_address    text not null,
-  subject         text,
-  snippet         text,
-  body            text,
-  received_at     timestamptz not null,
-  classification  text,
-  draft_reply     text,
-  labels          jsonb not null default '[]',
-  processed_at    timestamptz not null default now()
+  id               text primary key,          -- Gmail message ID
+  gmail_message_id text,
+  thread_id        text,
+  sender_email     text not null,
+  sender_name      text,
+  subject          text,
+  body_preview     text,
+  full_body        text,
+  received_at      timestamptz not null,
+  classification   text,
+  pipeline_stage   text default 'classified'
+                     check (pipeline_stage in ('classified','screening','interview','offer','rejected')),
+  draft_reply      text,
+  company_name     text,
+  role_title       text,
+  reply_sent       boolean default false,
+  reply_sent_at    timestamptz,
+  labels           jsonb not null default '[]',
+  processed_at     timestamptz not null default now()
 );
 
 create index if not exists inbox_emails_received_at_idx on inbox_emails (received_at desc);
@@ -150,17 +158,28 @@ create table if not exists settings (
 alter table settings add column if not exists gmail_access_token  text;
 alter table settings add column if not exists gmail_refresh_token text;
 
--- ─── gmail tracker integration ───────────────────────────────────────────────
-ALTER TABLE inbox_emails
-ADD COLUMN IF NOT EXISTS pipeline_stage TEXT DEFAULT 'classified'
+-- ─── gmail tracker integration — run on existing databases ───────────────────
+-- Column renames (safe: errors if already renamed — that's fine)
+-- ALTER TABLE inbox_emails RENAME COLUMN from_address TO sender_email;
+-- ALTER TABLE inbox_emails RENAME COLUMN snippet      TO body_preview;
+-- ALTER TABLE inbox_emails RENAME COLUMN body         TO full_body;
+
+-- New columns
+ALTER TABLE inbox_emails ADD COLUMN IF NOT EXISTS gmail_message_id TEXT;
+ALTER TABLE inbox_emails ADD COLUMN IF NOT EXISTS sender_name      TEXT;
+ALTER TABLE inbox_emails ADD COLUMN IF NOT EXISTS company_name     TEXT;
+ALTER TABLE inbox_emails ADD COLUMN IF NOT EXISTS role_title       TEXT;
+ALTER TABLE inbox_emails ADD COLUMN IF NOT EXISTS pipeline_stage   TEXT DEFAULT 'classified'
     CHECK (pipeline_stage IN ('classified','screening','interview','offer','rejected'));
+ALTER TABLE inbox_emails ADD COLUMN IF NOT EXISTS reply_sent       BOOLEAN DEFAULT FALSE;
+ALTER TABLE inbox_emails ADD COLUMN IF NOT EXISTS reply_sent_at    TIMESTAMPTZ;
 
-ALTER TABLE inbox_emails
-ADD COLUMN IF NOT EXISTS company_name TEXT,
-ADD COLUMN IF NOT EXISTS role_title   TEXT;
+-- Backfill gmail_message_id from id
+UPDATE inbox_emails SET gmail_message_id = id WHERE gmail_message_id IS NULL;
 
--- thread_id already exists in inbox_emails (was NOT NULL); index it if missing
-CREATE INDEX IF NOT EXISTS idx_inbox_emails_thread_id ON inbox_emails(thread_id);
+CREATE INDEX IF NOT EXISTS idx_inbox_emails_gmail_message_id ON inbox_emails(gmail_message_id);
+CREATE INDEX IF NOT EXISTS idx_inbox_emails_thread_id        ON inbox_emails(thread_id);
+CREATE INDEX IF NOT EXISTS idx_inbox_emails_pipeline_stage   ON inbox_emails(pipeline_stage);
 
 CREATE TABLE IF NOT EXISTS email_threads (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
