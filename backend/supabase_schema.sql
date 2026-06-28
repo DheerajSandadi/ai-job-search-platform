@@ -202,10 +202,67 @@ CREATE INDEX IF NOT EXISTS idx_email_threads_pipeline_stage
 CREATE INDEX IF NOT EXISTS idx_email_threads_updated_at
     ON email_threads(updated_at DESC);
 
+-- ─── tracker_applications ────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS tracker_applications (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_name     TEXT NOT NULL,
+    role_title       TEXT NOT NULL DEFAULT 'Unknown Role',
+    status           TEXT NOT NULL DEFAULT 'applied'
+        CHECK (status IN ('applied', 'screen', 'interview', 'offer', 'rejected')),
+    applied_date     TIMESTAMPTZ,
+    source           TEXT NOT NULL DEFAULT 'manual'
+        CHECK (source IN ('gmail_auto', 'manual')),
+    job_url          TEXT,
+    notes            TEXT,
+    latest_email_at  TIMESTAMPTZ,
+    email_count      INT NOT NULL DEFAULT 0,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tracker_applications_status
+    ON tracker_applications(status);
+CREATE INDEX IF NOT EXISTS idx_tracker_applications_company
+    ON tracker_applications(company_name);
+CREATE INDEX IF NOT EXISTS idx_tracker_applications_updated_at
+    ON tracker_applications(updated_at DESC);
+
+CREATE OR REPLACE TRIGGER tracker_applications_updated_at
+    BEFORE UPDATE ON tracker_applications
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Link inbox_emails to tracker_applications
+ALTER TABLE inbox_emails ADD COLUMN IF NOT EXISTS application_id UUID
+    REFERENCES tracker_applications(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_inbox_emails_application_id
+    ON inbox_emails(application_id);
+
 -- ─── manual-apply workflow columns ───────────────────────────────────────────
 alter table applications add column if not exists submitted_at  timestamptz;
 alter table applications add column if not exists approved_at   timestamptz;
 alter table applications add column if not exists retry_count   int not null default 0;
+
+-- ─── Row Level Security (prevent public data access) ────────────────────────
+-- Service role key bypasses RLS automatically — backend continues to work.
+-- All other (anon / authenticated) access is blocked by default once RLS is on.
+ALTER TABLE jobs                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recruiters          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resumes             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE applications        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE outreach            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE analytics           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pipeline_runs       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inbox_emails        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_threads       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tracker_applications ENABLE ROW LEVEL SECURITY;
+
+-- Explicitly revoke anon SELECT (belt-and-suspenders — RLS default already blocks)
+REVOKE SELECT ON jobs,recruiters,resumes,applications,outreach,analytics,
+                 pipeline_runs,inbox_emails,settings,email_threads,
+                 tracker_applications
+  FROM anon, authenticated;
 
 -- ─── auto-update updated_at trigger ─────────────────────────────────────────
 create or replace function update_updated_at_column()

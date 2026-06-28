@@ -26,3 +26,7 @@ aiofiles==23.2.1
 tenacity==8.3.0
 structlog==24.1.0
 rich==13.7.1
+# Test
+pytest==8.2.2
+pytest-asyncio==0.23.8
+pytest-mock==3.14.0

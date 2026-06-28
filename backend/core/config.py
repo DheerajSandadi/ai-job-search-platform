@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     APOLLO_API_KEY: str = ""
     APIFY_API_KEY: str = ""
+    VIBE_PROSPECTING_API_KEY: str = ""
 
     GOOGLE_CLOUD_PROJECT_ID: str = ""
     PUBSUB_TOPIC_NAME: str = "gmail-push"
