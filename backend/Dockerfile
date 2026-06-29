@@ -8,19 +8,18 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libxslt-dev \
     curl \
-    wget \
-    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# Two-pass install to work around pinned langchain/crewai version conflicts:
-# Pass 1 — install everything except the conflicting ecosystem with full dep
-#           resolution so transitive deps (click, starlette, etc.) are present.
-# Pass 2 — install the conflicting packages with --no-deps so pip's resolver
-#           doesn't reject the pinned versions.
-RUN grep -vE "^langchain|^crewai|^langgraph" requirements.txt > /tmp/req_safe.txt \
+
+# Strip test-only packages (everything from the "# Test" comment onward)
+# then apply the two-pass install to handle pinned langchain/crewai conflicts:
+#   Pass 1 — full resolution for everything except the conflicting AI ecosystem
+#   Pass 2 — --no-deps install for the pinned AI packages
+RUN sed '/^# Test/,$ d' requirements.txt > /tmp/req_prod.txt \
+    && grep -vE "^langchain|^crewai|^langgraph|^#" /tmp/req_prod.txt > /tmp/req_safe.txt \
     && pip install --no-cache-dir -r /tmp/req_safe.txt \
-    && grep -E "^langchain|^crewai|^langgraph" requirements.txt > /tmp/req_ai.txt \
+    && grep -E "^langchain|^crewai|^langgraph" /tmp/req_prod.txt > /tmp/req_ai.txt \
     && pip install --no-cache-dir --no-deps -r /tmp/req_ai.txt
 
 COPY . .

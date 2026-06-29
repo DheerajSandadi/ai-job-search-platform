@@ -11,6 +11,8 @@ services:
       - ./backend/.env
     volumes:
       - ./backend/resume.txt:/app/resume.txt:ro
+    networks:
+      - jobpilot
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -24,11 +26,26 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:8001
+        # NEXT_PUBLIC_API_URL is baked into client-side JS at build time.
+        # Keep this as the browser-accessible URL (localhost) not the
+        # internal service name — end-users' browsers can't resolve "backend".
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8001}
     container_name: jobpilot-frontend
     ports:
       - "3001:3001"
+    networks:
+      - jobpilot
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  jobpilot:
+    driver: bridge
