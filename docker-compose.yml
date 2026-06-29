@@ -40,7 +40,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001"]
+      test: ["CMD-SHELL", "node -e \"require('http').request({host:'localhost',port:3001,path:'/dashboard',timeout:5000},r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1)).end()\""]
       interval: 30s
       timeout: 10s
       retries: 3
