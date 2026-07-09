@@ -9,6 +9,9 @@ token.json
 # Resume file (may contain personal info)
 resume.txt
 
+# LangGraph orchestration state (local sqlite checkpoints + thread registry)
+backend/data/
+
 # Python
 __pycache__/
 *.pyc

@@ -22,9 +22,21 @@ class Settings(BaseSettings):
     DASHBOARD_USERNAME: str = "admin"
     DASHBOARD_PASSWORD: str = "changeme"
 
+    # Optional API protection. When API_KEY is set, /api/v1/* requires the
+    # X-API-Key header. Empty (default) keeps the local MVP flow open.
+    API_KEY: str = ""
+    # Optional shared secret for the Gmail Pub/Sub push endpoint. When set,
+    # /webhooks/gmail requires ?token=<value> (configure the same token on the
+    # Pub/Sub push subscription URL).
+    PUBSUB_VERIFICATION_TOKEN: str = ""
+
     ATS_CONFIDENCE_THRESHOLD: float = 0.8
     MORNING_PIPELINE_CRON: str = "0 6 * * *"
     RETRY_PIPELINE_CRON: str = "0 9 * * *"
+
+    # LangGraph orchestration — local sqlite persistence for interrupted runs
+    ORCHESTRATOR_CHECKPOINT_DB: str = "data/orchestrator_checkpoints.sqlite"
+    ORCHESTRATOR_REGISTRY_DB: str = "data/approval_threads.sqlite"
 
     class Config:
         env_file = ".env"

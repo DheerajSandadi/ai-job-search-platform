@@ -15,12 +15,14 @@ async def _execute_pipeline(key: str, run_id: str) -> None:
     try:
         if key == "morning":
             from pipelines.morning_pipeline import run
+            # The row created above doubles as the LangGraph thread_id
+            result = await run(pipeline_run_id=run_id)
         elif key == "inbox":
             from pipelines.inbox_pipeline import run
+            result = await run()
         else:
             from pipelines.retry_pipeline import run
-
-        result = await run()
+            result = await run()
         if sb:
             sb.table("pipeline_runs").update({
                 "status": "completed",
@@ -69,7 +71,7 @@ async def get_pipeline_status() -> PipelineStatusResponse:
         raise
     except Exception as e:
         logger.error("get_pipeline_status_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/morning/trigger", response_model=PipelineRun)
@@ -98,7 +100,7 @@ async def trigger_morning_pipeline(background_tasks: BackgroundTasks) -> Pipelin
         raise
     except Exception as e:
         logger.error("trigger_morning_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     background_tasks.add_task(_execute_pipeline, "morning", run_id)
     logger.info("morning_pipeline_triggered", run_id=run_id)
@@ -131,7 +133,7 @@ async def trigger_retry_pipeline(background_tasks: BackgroundTasks) -> PipelineR
         raise
     except Exception as e:
         logger.error("trigger_retry_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     background_tasks.add_task(_execute_pipeline, "retry", run_id)
     logger.info("retry_pipeline_triggered", run_id=run_id)
@@ -164,7 +166,7 @@ async def trigger_inbox_pipeline(background_tasks: BackgroundTasks) -> PipelineR
         raise
     except Exception as e:
         logger.error("trigger_inbox_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     background_tasks.add_task(_execute_pipeline, "inbox", run_id)
     logger.info("inbox_pipeline_triggered", run_id=run_id)

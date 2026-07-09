@@ -124,6 +124,104 @@ def _mock_sb_table(rows: list[dict]):
     return sb, builder, result
 
 
+# ─── In-memory fake Supabase ─────────────────────────────────────────────────
+# The fluent MagicMock above always returns the same rows; graph integration
+# tests need real per-table state (insert then select back). This fake
+# supports the subset of PostgREST chaining the codebase uses.
+
+class _FakeResult:
+    def __init__(self, data):
+        self.data = data
+
+
+class _FakeQuery:
+    def __init__(self, store: dict, table: str):
+        self._store = store
+        self._table = table
+        self._op = "select"
+        self._payload = None
+        self._filters: list[tuple[str, object]] = []
+        self._limit: int | None = None
+
+    # ops
+    def select(self, *_args, **_kwargs):
+        self._op = "select"
+        return self
+
+    def insert(self, payload):
+        self._op = "insert"
+        self._payload = payload
+        return self
+
+    def update(self, payload):
+        self._op = "update"
+        self._payload = payload
+        return self
+
+    def delete(self):
+        self._op = "delete"
+        return self
+
+    # filters / modifiers (only what the app uses)
+    def eq(self, col, val):
+        self._filters.append((col, val))
+        return self
+
+    def lt(self, col, val):  # retry pipeline
+        return self
+
+    def gte(self, col, val):
+        return self
+
+    def order(self, *_args, **_kwargs):
+        return self
+
+    def limit(self, n):
+        self._limit = n
+        return self
+
+    def range(self, *_args):
+        return self
+
+    def _rows(self):
+        rows = self._store.setdefault(self._table, [])
+        return [r for r in rows if all(str(r.get(c)) == str(v) for c, v in self._filters)]
+
+    def execute(self):
+        rows = self._store.setdefault(self._table, [])
+        if self._op == "insert":
+            payloads = self._payload if isinstance(self._payload, list) else [self._payload]
+            inserted = []
+            for p in payloads:
+                row = {"id": make_id(), "created_at": now_iso(), **p}
+                rows.append(row)
+                inserted.append(row)
+            return _FakeResult(inserted)
+        if self._op == "update":
+            matched = self._rows()
+            for r in matched:
+                r.update(self._payload)
+            return _FakeResult(matched)
+        if self._op == "delete":
+            matched = self._rows()
+            self._store[self._table] = [r for r in rows if r not in matched]
+            return _FakeResult(matched)
+        matched = self._rows()
+        if self._limit is not None:
+            matched = matched[: self._limit]
+        return _FakeResult(matched)
+
+
+class FakeSupabase:
+    """Minimal in-memory Supabase stand-in. Access rows via .store[table]."""
+
+    def __init__(self):
+        self.store: dict[str, list[dict]] = {}
+
+    def table(self, name: str) -> _FakeQuery:
+        return _FakeQuery(self.store, name)
+
+
 # ─── FastAPI TestClient fixture ───────────────────────────────────────────────
 
 @pytest.fixture()

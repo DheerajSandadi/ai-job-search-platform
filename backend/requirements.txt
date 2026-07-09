@@ -6,7 +6,13 @@ pydantic-settings==2.3.0
 langgraph==0.1.19
 langchain==0.2.5
 langchain-anthropic==0.1.15
-langchain-core==0.2.9
+# langgraph 0.1.19 declares langchain-core>=0.2.22 — 0.2.9 cannot import
+# langgraph.graph (missing RemoveMessage). Bumped within the 0.2.x line;
+# full test suite passes against 0.2.43 (orchestration spec §1 dry-run).
+langchain-core==0.2.43
+# AsyncSqliteSaver backend for LangGraph checkpoints (the sync SqliteSaver
+# raises NotImplementedError for ainvoke on this langgraph version)
+aiosqlite==0.20.0
 crewai==0.30.11
 crewai-tools==0.4.6
 anthropic==0.28.0

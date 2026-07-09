@@ -1,176 +1,110 @@
-"""Integration tests for the morning pipeline orchestrator (nodes + graph)."""
+"""Integration tests for the morning pipeline entrypoint driving the
+LangGraph StateGraph (per-node coverage lives in tests/unit/)."""
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+from langgraph.checkpoint.memory import MemorySaver
 
-from orchestrator.state import PipelineState
-from tests.conftest import make_id, now_iso
+from core.config import settings
+from orchestrator.graph import build_graph
+from tests.conftest import FakeSupabase
 
 
-def _initial_state() -> PipelineState:
-    return {
-        "run_id": make_id(),
-        "started_at": None,
-        "current_step": "start",
-        "errors": [],
-        "raw_jobs": [],
-        "scored_jobs": [],
-        "approved_jobs": [],
-        "pending_approvals": [],
-        "tailored_resumes": [],
-        "submitted_applications": [],
-        "failed_applications": [],
-        "recruiters": [],
-        "outreach_queue": [],
-        "outreach_sent": [],
-        "daily_stats": {},
+@pytest.fixture()
+def env(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "ATS_CONFIDENCE_THRESHOLD", 0.8)
+    monkeypatch.setattr(settings, "ORCHESTRATOR_REGISTRY_DB",
+                        str(tmp_path / "registry.sqlite"))
+    sb = FakeSupabase()
+    graph = build_graph(MemorySaver())
+    patches = [
+        patch("pipelines.morning_pipeline.get_graph", return_value=graph),
+        patch("pipelines.morning_pipeline.get_supabase_client", return_value=sb),
+        patch("orchestrator.nodes._get_sb", return_value=sb),
+    ]
+    for p in patches:
+        p.start()
+    yield sb
+    for p in patches:
+        p.stop()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_run_creates_and_completes_pipeline_row(env):
+    """No jobs found → log_skip path → run completes; the pipeline owns and
+    finalizes its own pipeline_runs row (6 AM scheduler path)."""
+    from pipelines.morning_pipeline import run
+
+    sb = env
+    with patch("orchestrator.nodes.search_jobs", return_value=[]):
+        result = await run()
+
+    assert result["status"] == "completed"
+    rows = sb.store["pipeline_runs"]
+    assert len(rows) == 1
+    assert rows[0]["pipeline_type"] == "morning"
+    assert rows[0]["status"] == "completed"
+    assert rows[0]["completed_at"]
+    assert result["run_id"] == rows[0]["id"]  # row id doubles as thread_id
+
+
+@pytest.mark.asyncio
+async def test_triggered_run_does_not_duplicate_pipeline_row(env):
+    """The API trigger route creates the row itself and passes its id in —
+    run() must reuse it as thread_id and leave row updates to the caller."""
+    from pipelines.morning_pipeline import run
+
+    sb = env
+    existing_id = "11111111-1111-1111-1111-111111111111"
+    sb.store["pipeline_runs"] = [
+        {"id": existing_id, "pipeline_type": "morning", "status": "running"}
+    ]
+
+    with patch("orchestrator.nodes.search_jobs", return_value=[]):
+        result = await run(pipeline_run_id=existing_id)
+
+    assert result["run_id"] == existing_id
+    assert len(sb.store["pipeline_runs"]) == 1
+    # still "running" — the trigger route's _execute_pipeline finalizes it
+    assert sb.store["pipeline_runs"][0]["status"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_paused_run_reports_pending_approvals(env):
+    """A run that tailored resumes pauses for review but the morning phase
+    reports completed, with paused_for_approval surfaced in stats."""
+    from pipelines.morning_pipeline import run
+
+    job = {
+        "title": "ML Engineer", "company": "Acme AI", "location": "Remote",
+        "url": "https://acme.ai/jobs/1", "description": "LLMs", "source": "dice",
+        "ats_score": 0.9, "relevance_score": 0.9, "composite_score": 0.9,
     }
+    resume = {"original_text": "o", "tailored_text": "t", "diff_summary": "d",
+              "ats_score": 0.9, "keywords_added": []}
 
+    with patch("orchestrator.nodes.search_jobs", return_value=[job]), \
+         patch("orchestrator.nodes.score_job", side_effect=lambda j: j), \
+         patch("orchestrator.nodes.resume_agent.run",
+               side_effect=lambda jobs: [{"job": jobs[0], "resume": resume}]):
+        result = await run()
 
-def _sb_mock() -> MagicMock:
-    """Minimal Supabase mock that satisfies all node DB calls."""
-    sb = MagicMock()
-    builder = MagicMock()
-    result = MagicMock()
-    result.data = []
-    builder.select.return_value = builder
-    builder.insert.return_value = builder
-    builder.update.return_value = builder
-    builder.eq.return_value = builder
-    builder.gte.return_value = builder
-    builder.order.return_value = builder
-    builder.limit.return_value = builder
-    builder.range.return_value = builder
-    builder.execute.return_value = result
-    sb.table.return_value = builder
-    return sb
-
-
-# ─── discover_jobs_node ───────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_discover_jobs_node_populates_raw_jobs():
-    from orchestrator.nodes import discover_jobs_node
-
-    raw = [
-        {"title": "ML Eng", "company": "Acme", "url": "https://acme.ai/1",
-         "location": "Remote", "description": "...", "source": "indeed"},
-    ]
-    sb = _sb_mock()
-    # No existing job at that URL
-    sb.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
-
-    state = _initial_state()
-    with patch("orchestrator.nodes.search_jobs", return_value=raw), \
-         patch("orchestrator.nodes._get_sb", return_value=sb):
-        result = await discover_jobs_node(state)
-
-    assert len(result["raw_jobs"]) == 1
-    assert result["raw_jobs"][0]["title"] == "ML Eng"
+    assert result["status"] == "completed"
+    assert result["stats"]["paused_for_approval"] is True
+    assert result["stats"]["pending_approvals"] == 1
 
 
 @pytest.mark.asyncio
-async def test_discover_jobs_node_handles_empty_results():
-    from orchestrator.nodes import discover_jobs_node
+async def test_graph_failure_marks_run_failed(env):
+    from pipelines.morning_pipeline import run
 
-    state = _initial_state()
-    with patch("orchestrator.nodes.search_jobs", return_value=[]), \
-         patch("orchestrator.nodes._get_sb", return_value=_sb_mock()):
-        result = await discover_jobs_node(state)
+    sb = env
+    with patch("pipelines.morning_pipeline.get_graph",
+               side_effect=RuntimeError("compile boom")):
+        result = await run()
 
-    assert result["raw_jobs"] == []
-    assert result["errors"] == []
-
-
-@pytest.mark.asyncio
-async def test_discover_jobs_node_records_error_on_exception():
-    from orchestrator.nodes import discover_jobs_node
-
-    state = _initial_state()
-    with patch("orchestrator.nodes.search_jobs", side_effect=RuntimeError("Apify down")), \
-         patch("orchestrator.nodes._get_sb", return_value=_sb_mock()):
-        result = await discover_jobs_node(state)
-
-    assert any("discover_jobs" in e for e in result["errors"])
-    assert result["raw_jobs"] == []
-
-
-# ─── score_jobs_node ──────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_score_jobs_node_filters_by_threshold():
-    from orchestrator.nodes import score_jobs_node
-
-    raw = [
-        {"title": "ML Eng", "company": "Acme", "url": "https://acme.ai/1"},
-        {"title": "Data Analyst", "company": "Corp B", "url": "https://corp.b/2"},
-    ]
-    scored = [
-        {**raw[0], "ats_score": 0.85, "relevance_score": 0.90, "composite_score": 0.88},
-        {**raw[1], "ats_score": 0.40, "relevance_score": 0.30, "composite_score": 0.34},
-    ]
-
-    state = {**_initial_state(), "raw_jobs": raw}
-    sb = _sb_mock()
-
-    with patch("orchestrator.nodes.score_job", side_effect=lambda j: scored[raw.index(j)]), \
-         patch("orchestrator.nodes._get_sb", return_value=sb):
-        result = await score_jobs_node(state)
-
-    assert len(result["scored_jobs"]) == 2
-    # Only the high-scoring job should be promoted to "scored" status in DB
-    update_calls = [
-        c for c in sb.table.return_value.update.call_args_list
-    ]
-    high_score_updates = [
-        c for c in update_calls
-        if isinstance(c.args[0] if c.args else None, dict)
-        and c.args[0].get("status") == "scored"
-    ]
-    # At least one "scored" update happened
-    assert len(high_score_updates) >= 0  # non-zero means it ran correctly
-
-
-# ─── summarize_node ───────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_summarize_node_writes_analytics_row():
-    from orchestrator.nodes import summarize_node
-
-    state = {
-        **_initial_state(),
-        "raw_jobs": [{"x": 1}] * 5,
-        "scored_jobs": [{"composite_score": 0.80}] * 3,
-        "outreach_sent": [{"sent": True}] * 2,
-    }
-    sb = _sb_mock()
-
-    with patch("orchestrator.nodes._get_sb", return_value=sb):
-        result = await summarize_node(state)
-
-    assert result["current_step"] == "complete"
-    assert "jobs_found" in result["daily_stats"]
-    assert result["daily_stats"]["jobs_found"] == 3
-
-
-# ─── full graph smoke test ────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_morning_graph_runs_to_completion():
-    from orchestrator.graph import morning_graph
-
-    state = _initial_state()
-    sb = _sb_mock()
-
-    with patch("orchestrator.nodes.search_jobs", return_value=[]), \
-         patch("orchestrator.nodes._get_sb", return_value=sb), \
-         patch("orchestrator.nodes.resume_agent"), \
-         patch("orchestrator.nodes.recruiter_agent"), \
-         patch("orchestrator.nodes.outreach_agent"):
-        result = await morning_graph.invoke(state)
-
-    assert result["current_step"] == "complete"
-    assert isinstance(result["errors"], list)
+    assert result["status"] == "failed"
+    assert "compile boom" in result["errors"][0]
+    assert sb.store["pipeline_runs"][0]["status"] == "failed"
